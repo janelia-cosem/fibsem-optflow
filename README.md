@@ -1,6 +1,11 @@
 # fibsem-optflow
 Repository related to optical flow calculations for fibsem images
 
+
+## Requirements
+
+opencv
+
 ## Basic build
 
 g++ -ggdb optflow.cpp -o optflow `pkg-config --cflags --libs opencv` -lgsl -lblas
