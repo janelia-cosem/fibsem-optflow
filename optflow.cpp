@@ -8,16 +8,35 @@
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaoptflow.hpp>
 
-#include <gsl/gsl_qrng.h>
+#include "optflow.h"
 
 using namespace cv;
 using namespace std;
 using namespace cv::cuda;
 
-int two_file(string frame0_name, string frame1_name, string file, string algo, int crop_width, int n_pts, float scale)
+const string keys =
+  "{ @output | | output flow}"
+  "{ @frame0 | | frame 0}"
+  "{ frame1 | | frame}"
+  "{ crop | 0 | crop size}"
+  "{ style | 0 | style}"
+  "{ scale | 0.5 | scale}"
+  "{ tau | | tau}"
+  "{ lambda | | lambda}"
+  "{ theta | | theta}"
+  "{ nscales | | nscales}"
+  "{ warps | | warps}"
+  "{ epsilon | | epsilon}"
+  "{ iterations | | iterations}"
+  "{ scaleStep | | scaleStep}"
+  "{ gamma | | gamma}"
+  "{help h || show help message}"
+  ;
+
+
+int two_file(string frame0_name, string frame1_name, string file, int crop_width, float scale, const OptflowArgs& args)
 {
 
-    gsl_qrng * q = gsl_qrng_alloc (gsl_qrng_sobol, 2);
 
     Mat frame0 = imread(frame0_name, IMREAD_GRAYSCALE);
     Mat frame1 = imread(frame1_name, IMREAD_GRAYSCALE);
@@ -48,79 +67,22 @@ int two_file(string frame0_name, string frame1_name, string file, string algo, i
 	resize(frame0, frame0, Size(), scale, scale);
 	resize(frame1, frame1, Size(), scale, scale);
       }
-    GpuMat frame0_GPU, frame1_GPU, flow_GPU, ptstotrack_GPU;
-    GpuMat status_GPU, error_GPU;
+    GpuMat frame0_GPU, frame1_GPU, flow_GPU;
     Mat_<Point2f> flow;
-    vector<Point2f> ptstotrack(n_pts);
 
-    if (algo == "SparsePLK")
-      {
-	for (int i=0; i < n_pts; i++)
-	  {
-	    double v[2];
-	    gsl_qrng_get (q, v);
-	    ptstotrack[i].x = v[0]*frame0.cols;
-	    ptstotrack[i].y = v[1]*frame0.rows;
-	  }
-	ptstotrack_GPU.upload(ptstotrack);
-      }
-    gsl_qrng_free (q);
-    if (algo == "Brox")
-      {
-    	frame0.convertTo(frame0, CV_32F, 1.0/255.0);
-	frame1.convertTo(frame1, CV_32F, 1.0/255.0);
-      }
-    
     frame0_GPU.upload(frame0);
     frame1_GPU.upload(frame1);
-  
-    if (algo == "TVL")
-      {
-	
-	Ptr<OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(0.25, 0.05/scale, 0.2);
-	solver -> calc(frame0_GPU, frame1_GPU, flow_GPU);
-      }
-    else if (algo == "PLK")
-      {
-	Ptr<DensePyrLKOpticalFlow> solver = cv::cuda::DensePyrLKOpticalFlow::create();
-	solver -> calc(frame0_GPU, frame1_GPU, flow_GPU);
-      }
-    else if (algo == "Brox")
-      {
-	Ptr<BroxOpticalFlow> solver = cv::cuda::BroxOpticalFlow::create();
-	solver -> calc(frame0_GPU, frame1_GPU, flow_GPU);
-      }
-    else if (algo == "SparsePLK")
-      {
-	Ptr<cv::cuda::SparsePyrLKOpticalFlow> solver = cv::cuda::SparsePyrLKOpticalFlow::create(Size(51,51)) ;
-	solver -> calc(frame0_GPU, frame1_GPU, ptstotrack_GPU, flow_GPU, status_GPU, error_GPU);
-      }
-
+    TVL1_solve(frame0_GPU, frame1_GPU, flow_GPU, args);
 
     flow_GPU.download(flow);
-    
+
     string file_x = file+ "_x.tiff", file_y = file + "_y.tiff";
+
     vector<Mat> flow_xy;
+
     Mat error;
     split(flow, flow_xy);
-    if (algo == "SparsePLK")
-      {
-	Mat x_pts(Size(n_pts,1), CV_64F);
-	Mat y_pts(Size(n_pts,1), CV_64F);
-	error_GPU.download(error);
-	for (int i=0; i < n_pts; i++)
-	  {
-	    x_pts.at<double>(i) = ptstotrack[i].x;
-	    y_pts.at<double>(i) = ptstotrack[i].y;
-	  }
-	x_pts.convertTo(x_pts, CV_32F);
-	y_pts.convertTo(y_pts, CV_32F);
-	error.convertTo(error, CV_32F);
-	flow_xy[0].push_back(x_pts);
-	flow_xy[0].push_back(error);
-	flow_xy[1].push_back(y_pts);
-	flow_xy[1].push_back(error);
-      }
+
     imwrite(file_x, flow_xy[0]);
     imwrite(file_y, flow_xy[1]);
 
@@ -128,7 +90,7 @@ int two_file(string frame0_name, string frame1_name, string file, string algo, i
     return 0;
 }
 
-int from_file(string file_name, string output_dir, float scale)
+int from_file(string file_name, string output_dir, float scale, const OptflowArgs& args)
 {
   ifstream infile(file_name.c_str());
   string frame0_name, frame1_name, out_name;
@@ -148,8 +110,7 @@ int from_file(string file_name, string output_dir, float scale)
           
       frame0_GPU.upload(frame0);
       frame1_GPU.upload(frame1);
-      Ptr<OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(0.25, 0.05/scale, 0.2);
-      solver -> calc(frame0_GPU, frame1_GPU, flow_GPU);
+      TVL1_solve(frame0_GPU, frame1_GPU, flow_GPU, args);
       flow_GPU.download(flow);
       string file_x = output_dir+"/"+out_name+"_x.tiff";
       string file_y = output_dir+"/"+out_name+"_y.tiff";
@@ -166,22 +127,37 @@ int from_file(string file_name, string output_dir, float scale)
   
 int main(int argc, const char* argv[])
 {
-    cv::CommandLineParser parser(argc, argv, "{help h || show help message}"
-            "{ @output | | output flow}{ @frame0 | | frame 0}{ frame1 | | frame}{ algo | TVL | algorithm}{ crop | 0 | crop size}{ n_pts | 1 | n_pts}{ style | 0 | style}{scale | 0.5 | scale}");
+    cv::CommandLineParser parser(argc, argv, keys);
     if (parser.has("help"))
       {
         parser.printMessage();
         return 0;
       }
-
-    string frame0_name = parser.get<string>("@frame0");
-    string frame1_name = parser.get<string>("frame1");
-    string file = parser.get<string>("@output");
-    string algo = parser.get<string>("algo");
-    int crop_width = parser.get<int>("crop");
-    int n_pts = parser.get<int>("n_pts");
-    int style = parser.get<int>("style");
-    float scale = parser.get<float>("scale");
+    
+    string file = parser.get<string>( "@output" );
+    string frame0_name = parser.get<string>( "@frame0" );
+    string frame1_name = parser.get<string>( "frame1" );
+    int crop_width = parser.get<int>( "crop" );
+    int style = parser.get<int>( "style" );
+    float scale = parser.get<float>( "scale" );
+    OptflowArgs args;
+    if (parser.has("tau")) args.tau = parser.get<double>( "tau" );
+    if (parser.has("lambda"))
+      {
+	args.lambda = parser.get<double>( "lambda" );
+      }
+    else
+      {
+	args.lambda = args.lambda/scale;
+      }
+    if (parser.has("theta")) args.theta = parser.get<double>( "theta" );
+    if (parser.has("nscales")) args.nscales = parser.get<int>( "nscales" );
+    if (parser.has("warps")) args.warps = parser.get<int>( "warps" );
+    if (parser.has("epsilon")) args.epsilon = parser.get<double>( "epsilon" );
+    if (parser.has("iterations")) args.iterations = parser.get<int>( "iterations" );
+    if (parser.has("scaleStep")) args.scaleStep = parser.get<double>( "scaleStep" );
+    if (parser.has("gamma")) args.gamma = parser.get<double>( "gamma" );
+    
     int pass_fail;
 
     if ( style == 0 && (frame0_name.empty() || frame1_name.empty() || file.empty()))
@@ -197,12 +173,18 @@ int main(int argc, const char* argv[])
 
     if ( style == 0)
       {
-	pass_fail = two_file(frame0_name, frame1_name, file, algo, crop_width, n_pts, scale);
+	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, args);
 	  }
     else if (style == 1)
       {
-	pass_fail = from_file(frame0_name, file, scale);
+	pass_fail = from_file(frame0_name, file, scale, args);
       }
     return pass_fail;
 }
 
+
+void TVL1_solve(GpuMat frame0, GpuMat frame1, GpuMat& output, const OptflowArgs& args)
+{
+  Ptr<OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(args.tau, args.lambda, args.theta, args.nscales, args.warps, args.epsilon, args.iterations, args.scaleStep, args.gamma);
+  solver -> calc(frame0, frame1, output);
+}
