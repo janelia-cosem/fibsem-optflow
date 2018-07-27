@@ -37,9 +37,11 @@ struct OptflowArgs
 };
   
 
-int two_file(string frame0_name, string frame1_name, string file, int crop_width, float scale, const OptflowArgs& args);
+int two_file(string frame0_name, string frame1_name, string file, int crop_width, float scale, int top, int bottom, const OptflowArgs& args);
 
-int from_file(string file_name, string output_dir, float scale, const OptflowArgs& args);
+int from_file(string file_name, string output_dir, float scale, int top, int bottom, const OptflowArgs& args);
+
+void solve_wrapper(Mat frame0, Mat frame1, string output_dir, string out_name, const OptflowArgs& args);
 
 void TVL1_solve(GpuMat frame0, GpuMat frame1, GpuMat& output, const OptflowArgs& args); 
 
