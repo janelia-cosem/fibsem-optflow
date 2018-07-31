@@ -17,10 +17,10 @@ def gen_file_list(cross, stack, base_path, n, render_connect_params):
     with gzip.open(cross) as f:
         pairs = json.loads(f.read().decode("ascii"))
 
-    optflow_input = ["{} {} {}_{}~{}_{}\n".format(
+    optflow_input = ["{} {} {}~{}~{}_{}\n".format(
         imageurls[pair['p']['id']], imageurls[pair['q']['id']],
-        pair['p']['id'], pair['q']['id'],
-        pair['p']['groupId'], pair['q']['groupId'])
+        pair['p']['groupId'], pair['q']['groupId'],
+        pair['p']['id'], pair['q']['id'])
         for pair in pairs['neighborPairs']]
     len_input = len(optflow_input)
     if n > 1:
