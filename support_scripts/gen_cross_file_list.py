@@ -21,7 +21,7 @@ def gen_file_list(cross, stack, base_path, n, render_connect_params):
         imageurls[pair['p']['id']], imageurls[pair['q']['id']],
         pair['p']['id'], pair['q']['id'],
         pair['p']['groupId'], pair['q']['groupId'])
-        for pair in pairs['neighborpairs']]
+        for pair in pairs['neighborPairs']]
     len_input = len(optflow_input)
     if n > 1:
         for i in range(n):
