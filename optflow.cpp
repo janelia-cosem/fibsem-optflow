@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include <opencv2/core/utility.hpp>
 #include "opencv2/video.hpp"
@@ -140,13 +141,13 @@ int from_file(string file_name, string output_dir, float scale, int top, int bot
 	{
 	  roi.y = 0;
 	  roi.height = top; 
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_top", args);
+	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_"+to_string(scale)+"_top", args);
 	}
       if (bottom)
 	{
 	  roi.y = frame0.rows-bottom;
 	  roi.height= bottom;
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_bottom", args);
+	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_"+to_string(scale)+"_bottom", args);
 	}
     }
 
