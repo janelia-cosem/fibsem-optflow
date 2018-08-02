@@ -16,7 +16,6 @@ def gen_matches(flow_dir, match_name, n, stack, render_connect_params):
     for base in glob("{}/*_top_x.tiff".format(flow_dir)):
         base = base[:-11]  # Remove the scale_top_x.tiff
         scale = np.float(base.split("_")[-1])  # Grab scale
-        scale = 0.5
         inv_scale = 1/scale
         base = "_".join(base.split("_")[:-1])  # Restore it
         top_bottom = ["top", "bottom"]
