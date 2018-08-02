@@ -14,7 +14,7 @@ def gen_matches(flow_dir, match_name, n, stack, render_connect_params):
         stack, render=render)
     spec_to_size = {tile.tileId: tile.maxY for tile in tilespecs}
     for base in glob("{}/*_top_x.tiff".format(flow_dir)):
-        base = base[:-11]  # Remove the scale_top_x.tiff
+        base = base[:-11]  # Remove the _top_x.tiff
         scale = np.float(base.split("_")[-1])  # Grab scale
         inv_scale = 1/scale
         base = "_".join(base.split("_")[:-1])  # Restore it
@@ -26,9 +26,8 @@ def gen_matches(flow_dir, match_name, n, stack, render_connect_params):
         p = []
         q = []
         for s in top_bottom:
-            im_x = np.array(Image.open(base+"_"+s+"_x.tiff"))
-            im_y = np.array(Image.open(base+"_"+s+"_y.tiff"))
-
+            im_x = np.array(Image.open(base+"_"+str(scale)+"_"+s+"_x.tiff"))
+            im_y = np.array(Image.open(base+"_"+str(scale)+"_"+s+"_y.tiff"))
             rand = np.random.random([n, 2])*im_x.shape
             rand = rand.astype(np.int)
             w += np.ones(n).tolist()
