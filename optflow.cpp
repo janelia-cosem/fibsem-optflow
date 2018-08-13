@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <deque>
+#include <vector>
 
 #include <opencv2/core/utility.hpp>
 #include "opencv2/video.hpp"
