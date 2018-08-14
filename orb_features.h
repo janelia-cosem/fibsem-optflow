@@ -31,6 +31,6 @@ struct OrbArgs
   }
 };
 
-void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat& affine, const OrbArgs& args)
+void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMatMat& flow, const OrbArgs& args)
 
 #endif

@@ -12,6 +12,7 @@
 #include <opencv2/cudaoptflow.hpp>
 
 #include "optflow.h"
+#include "orb_features.h"
 
 
 const std::string keys =
@@ -33,7 +34,18 @@ const std::string keys =
   "{ top | 0 | Size of top resin}"
   "{ bottom | 0 | Size of bottom resin}"
   "{ border | 0 | border}"
-  "{help h || show help message}"
+  "{ orb | | Use orb features for initial flow }"
+  "{ orbn | | orb nfeatures }"
+  "{ orbscale | | orb scaleFactor }"
+  "{ orbnlevels | | orb nlevels }"
+  "{ orbedge | | orb edgeThreshold }"
+  "{ orbfirst | | orb firstLevel }"
+  "{ orbWTA | | orb WTA_K factor }"
+  "{ orbpatch | | orb patchSize }"
+  "{ orbfast | | orb fast threshold}"
+  "{ orbblur | | orb blur}"
+  "{ orbratio | | orb ratio}"
+  "{help h || show help message }"
   ;
 
 
@@ -55,7 +67,10 @@ int main(int argc, const char* argv[])
     int top = parser.get<int>( "top" );
     int bottom = parser.get<int>( "bottom" );
     int border = parser.get<int>("border");
+    bool orb;
     OptflowArgs args;
+    OrbArgs orbargs;
+    
     if (parser.has("tau")) args.tau = parser.get<double>( "tau" );
     if (parser.has("lambda"))
       {
@@ -72,6 +87,21 @@ int main(int argc, const char* argv[])
     if (parser.has("iterations")) args.iterations = parser.get<int>( "iterations" );
     if (parser.has("scaleStep")) args.scaleStep = parser.get<double>( "scaleStep" );
     if (parser.has("gamma")) args.gamma = parser.get<double>( "gamma" );
+    if (parser.has("orb"))
+      {
+	orb = true;
+	args.useInitialFlow = true;
+      }
+    if (parser.has("orbn")) orbargs.nfeatures = parser.get<int>( "orbn" );
+    if (parser.has("orbscale")) orbargs.scaleFactor = parser.get<float>( "orbscale" );
+    if (parser.has("orbnlevels")) orbargs.nlevels = parser.get<int>( "orbnlevels" );
+    if (parser.has("orbedge")) orbargs.edgeThreshold = parser.get<int>( "orbedge" );
+    if (parser.has("orbfirst")) orbargs.firstLevel = parser.get<int>( "orbfirst" );
+    if (parser.has("orbWTA")) orbargs.WTA_K = parser.get<int>( "orbWTA" );
+    if (parser.has("orbpatch")) orbargs.patchSize = parser.get<int>( "orbpatch" );
+    if (parser.has("orbfast")) orbargs.fastThreshold = parser.get<int>( "orbfast" );
+    if (parser.has("orbblur")) orbargs.blurForDescriptor = true;
+    if (parser.has("orbratio")) orbargs.ratio = parser.get<float>( "orbratio" );
     
     int pass_fail;
 
@@ -88,26 +118,25 @@ int main(int argc, const char* argv[])
 
     if ( style == 0)
       {
-	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, args);
+	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, orb, args, orbargs);
 	  }
     else if (style == 1)
       {
-	pass_fail = from_file(frame0_name, file, scale, top, bottom, args);
+	pass_fail = from_file(frame0_name, file, scale, top, bottom, orb, args, orbargs);
       }
     else if (style == 2)
       {
-	pass_fail = average_flow(frame0_name, file, scale, border, args);
+	pass_fail = average_flow(frame0_name, file, scale, border, orb, args, orbargs);
       }
     return pass_fail;
 }
 
-int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, const OptflowArgs& args)
+int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
 {
 
 
     cv::Mat frame0 = imread(frame0_name, cv::IMREAD_GRAYSCALE);
     cv::Mat frame1 = imread(frame1_name, cv::IMREAD_GRAYSCALE);
-    
     if (frame1.size() != frame0.size())
       {
         std::cerr << "Images should be of equal sizes" << std::endl;
@@ -134,40 +163,44 @@ int two_file(std::string frame0_name, std::string frame1_name, std::string file,
 	resize(frame0, frame0, cv::Size(), scale, scale);
 	resize(frame1, frame1, cv::Size(), scale, scale);
       }
-    cv::Rect roi;
-    roi.x = 0;
-    roi.width = frame0.cols;
+    cv::Rect roi_top, roi_bottom;
+    std::vector< cv::Rect > rois;
+
+    roi_top.x = 0;
+    roi_bottom.x = 0;
+    roi_top.width = frame0.cols;
+    roi_bottom.width = frame0.cols;
+    roi_top.height = 0; //bottom isn't used if not flagged so don't need to initialise
     top = top*scale;
     bottom = bottom*scale;
     std::string output_dir = "";
     std::string out_name = file;
-      if (!( top || bottom))
-	{
-	  solve_wrapper(frame0, frame1, output_dir, out_name, args);
-	}
-      if (top)
-	{
-	  roi.y = 0;
-	  roi.height = top;
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_top", args);
-	}
-      if (bottom)
-	{
-	  roi.y = frame0.rows-bottom;
-	  roi.height= bottom;
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_bottom", args);
-	}
-
+    if (!top)
+      {
+	rois.pushback(roi_top);
+      }
+    else
+      {
+	roi_top.y = 0;
+	roi_top.height = top;
+	rois.pushback(roi_top);
+      }
+    if (bottom)
+      {
+	roi_bottom.y = frame0.rows-bottom;
+	roi_bottom.height= bottom;
+	rois.pushback(roi_bottom);
+      }
+    solve_rois(frame0, frame1, output_dir, out_name, rois, args, orbargs);
     
     return 0;
 }
 
-int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, const OptflowArgs& args)
+int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
 {
   std::ifstream infile(file_name.c_str());
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
   cv::Mat frame0, frame1;
-  cv::Rect roi;
   top = top*scale;
   bottom = bottom*scale;
       
@@ -194,31 +227,41 @@ int from_file(std::string file_name, std::string output_dir, float scale, int to
 	}
       old_frame0 = frame0_name;
       old_frame1 = frame1_name;
+      cv::Rect roi_top, roi_bottom;
+      std::vector< cv::Rect > rois;
       
-      roi.x = 0;
-      roi.width = frame0.cols;
-      if (!( top || bottom))
+      roi_top.x = 0;
+      roi_bottom.x = 0;
+      roi_top.width = frame0.cols;
+      roi_bottom.width = frame0.cols;
+      roi_top.height = 0; //bottom isn't used if not flagged so don't need to initialise
+      top = top*scale;
+      bottom = bottom*scale;
+      std::string output_dir = "";
+      std::string out_name = file;
+      if (!top)
 	{
-	  solve_wrapper(frame0, frame1, output_dir, out_name, args);
+	  rois.pushback(roi_top);
 	}
-      if (top)
+      else
 	{
-	  roi.y = 0;
-	  roi.height = top; 
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_"+std::to_string(scale)+"_top", args);
+	  roi_top.y = 0;
+	  roi_top.height = top;
+	  rois.pushback(roi_top);
 	}
       if (bottom)
 	{
-	  roi.y = frame0.rows-bottom;
-	  roi.height= bottom;
-	  solve_wrapper(frame0(roi), frame1(roi), output_dir, out_name+"_"+std::to_string(scale)+"_bottom", args);
+	  roi_bottom.y = frame0.rows-bottom;
+	  roi_bottom.height= bottom;
+	  rois.pushback(roi_bottom);
 	}
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, args, orbargs);
     }
   
   return 0;
 }
 
-int average_flow(std::string file_name, std::string output_dir, float scale, int border, const OptflowArgs& args)
+int average_flow(std::string file_name, std::string output_dir, float scale, int border, const OptflowArgs& args, const OrbArgs& orbargs)
 {
   std::string im_name;
   std::ifstream infile(file_name.c_str());
@@ -266,7 +309,7 @@ int average_flow(std::string file_name, std::string output_dir, float scale, int
 }
 
 
-void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, float scale, int border, const OptflowArgs& args)
+void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, float scale, int border, const OptflowArgs& args, const OrbArgs& orbargs)
 {
   cv::cuda::GpuMat frame_GPU, blur_GPU, flow_GPU;
   cv::Mat scale_flow, flow;
@@ -305,23 +348,52 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 }
 
 
-void solve_wrapper(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, const OptflowArgs& args)
+void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, const OptflowArgs& args, const OrbArgs& orbargs)
 {
-  cv::cuda::GpuMat frame0_GPU, frame1_GPU, flow_GPU;
+  cv::cuda::GpuMat frame0_GPU, frame1_GPU;
   frame0_GPU.upload(frame0);
   frame1_GPU.upload(frame1);
-  cv::Mat_<cv::Point2f> flow;
+  cv::cuda::GpuMat flow_GPU = frame0_GPU;
+
+  if (orb)
+    {
+      find_alignment_warp(frame0_GPU, frame1_GPU, flow_GPU, orbargs)
+    }
+  if ( rois.size() == 1 )
+    {
+      solve_wrapper(frame0_GPU, frame1_GPU, flow_GPU, output_dir, out_name, args);
+    }
+  else
+    {
+      if ( rois.at(0).height > 0)
+	{
+	  cv::cuda::GpuMat sub_flow;
+	  sub_flow = flow_GPU(rois.at(0));
+	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), sub_flow, output_dir, out_name+"_top", args);
+	}
+      if ( rois.at(1).height > 0)
+	{
+	  cv::cuda::GpuMat sub_flow;
+	  sub_flow = flow_GPU(rois.at(1));
+	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), sub_flow, output_dir, out_name+"_bottom", args);
+	}
+    }
+}
+
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat flow, std::string output_dir, std::string out_name, const OptflowArgs& args)
+{  
   TVL1_solve(frame0_GPU, frame1_GPU, flow_GPU, args);
+  cv::Mat_<cv::Point2f> flow;
+
   flow_GPU.download(flow);
   std::string file_x = output_dir+"/"+out_name+"_x.tiff";
   std::string file_y = output_dir+"/"+out_name+"_y.tiff";
   std::vector<cv::Mat> flow_xy;
-  split(flow, flow_xy);
+  cv::split(flow, flow_xy);
   
   imwrite(file_x, flow_xy[0]);
   imwrite(file_y, flow_xy[1]);
 }
-
 void TVL1_solve(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& output, const OptflowArgs& args)
 {
   cv::Ptr<cv::cuda::OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(args.tau, args.lambda, args.theta, args.nscales, args.warps, args.epsilon, args.iterations, args.scaleStep, args.gamma);
