@@ -43,7 +43,7 @@ void find_alignment_warp(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::c
   affine = cv::getAffineTransform( points_0, points_1 );
 
   cv::cuda::GpuMat flow_x, flow_y;
-  cv::cuda::buildWarpAffineMaps(affine, 0, cv::Size(), flow_x, flow_y);
+  cv::cuda::buildWarpAffineMaps(affine, 0, frame0.size(), flow_x, flow_y);
   std::vector< cv::cuda::GpuMat > flow_vec;
   flow_vec.push_back(flow_x);
   flow_vec.push_back(flow_y);
