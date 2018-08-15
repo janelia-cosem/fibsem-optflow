@@ -11,8 +11,8 @@
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaoptflow.hpp>
 
-#include "optflow.h"
 #include "orb_features.h"
+#include "optflow.h"
 
 
 const std::string keys =
@@ -126,7 +126,7 @@ int main(int argc, const char* argv[])
       }
     else if (style == 2)
       {
-	pass_fail = average_flow(frame0_name, file, scale, border, orb, args, orbargs);
+	pass_fail = average_flow(frame0_name, file, scale, border, args);
       }
     return pass_fail;
 }
@@ -177,21 +177,21 @@ int two_file(std::string frame0_name, std::string frame1_name, std::string file,
     std::string out_name = file;
     if (!top)
       {
-	rois.pushback(roi_top);
+	rois.push_back(roi_top);
       }
     else
       {
 	roi_top.y = 0;
 	roi_top.height = top;
-	rois.pushback(roi_top);
+	rois.push_back(roi_top);
       }
     if (bottom)
       {
 	roi_bottom.y = frame0.rows-bottom;
 	roi_bottom.height= bottom;
-	rois.pushback(roi_bottom);
+	rois.push_back(roi_bottom);
       }
-    solve_rois(frame0, frame1, output_dir, out_name, rois, args, orbargs);
+    solve_rois(frame0, frame1, output_dir, out_name, rois, orb, args, orbargs);
     
     return 0;
 }
@@ -238,30 +238,30 @@ int from_file(std::string file_name, std::string output_dir, float scale, int to
       top = top*scale;
       bottom = bottom*scale;
       std::string output_dir = "";
-      std::string out_name = file;
+      std::string out_name = file_name;
       if (!top)
 	{
-	  rois.pushback(roi_top);
+	  rois.push_back(roi_top);
 	}
       else
 	{
 	  roi_top.y = 0;
 	  roi_top.height = top;
-	  rois.pushback(roi_top);
+	  rois.push_back(roi_top);
 	}
       if (bottom)
 	{
 	  roi_bottom.y = frame0.rows-bottom;
 	  roi_bottom.height= bottom;
-	  rois.pushback(roi_bottom);
+	  rois.push_back(roi_bottom);
 	}
-      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, args, orbargs);
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, orb, args, orbargs);
     }
   
   return 0;
 }
 
-int average_flow(std::string file_name, std::string output_dir, float scale, int border, const OptflowArgs& args, const OrbArgs& orbargs)
+int average_flow(std::string file_name, std::string output_dir, float scale, int border, const OptflowArgs& args)
 {
   std::string im_name;
   std::ifstream infile(file_name.c_str());
@@ -309,7 +309,7 @@ int average_flow(std::string file_name, std::string output_dir, float scale, int
 }
 
 
-void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, float scale, int border, const OptflowArgs& args, const OrbArgs& orbargs)
+void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, float scale, int border, const OptflowArgs& args)
 {
   cv::cuda::GpuMat frame_GPU, blur_GPU, flow_GPU;
   cv::Mat scale_flow, flow;
@@ -348,7 +348,7 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 }
 
 
-void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, const OptflowArgs& args, const OrbArgs& orbargs)
+void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
 {
   cv::cuda::GpuMat frame0_GPU, frame1_GPU;
   frame0_GPU.upload(frame0);
@@ -357,7 +357,7 @@ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::str
 
   if (orb)
     {
-      find_alignment_warp(frame0_GPU, frame1_GPU, flow_GPU, orbargs)
+      find_alignment(frame0_GPU, frame1_GPU, flow_GPU, orbargs);
     }
   if ( rois.size() == 1 )
     {
@@ -380,9 +380,9 @@ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::str
     }
 }
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat flow, std::string output_dir, std::string out_name, const OptflowArgs& args)
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat flow_GPU, std::string output_dir, std::string out_name, const OptflowArgs& args)
 {  
-  TVL1_solve(frame0_GPU, frame1_GPU, flow_GPU, args);
+  TVL1_solve(frame0, frame1, flow_GPU, args);
   cv::Mat_<cv::Point2f> flow;
 
   flow_GPU.download(flow);
@@ -394,6 +394,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::G
   imwrite(file_x, flow_xy[0]);
   imwrite(file_y, flow_xy[1]);
 }
+
 void TVL1_solve(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& output, const OptflowArgs& args)
 {
   cv::Ptr<cv::cuda::OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(args.tau, args.lambda, args.theta, args.nscales, args.warps, args.epsilon, args.iterations, args.scaleStep, args.gamma);

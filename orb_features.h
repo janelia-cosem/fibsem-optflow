@@ -18,7 +18,7 @@ struct OrbArgs
   float ratio;
   OrbArgs()
   {
-    nfeatures=500;
+    nfeatures=5000;
     scaleFactor=1.2;
     nlevels=8;
     edgeThreshold=31;
@@ -27,10 +27,10 @@ struct OrbArgs
     patchSize=31;
     fastThreshold=20;
     blurForDescriptor=false;
-    ratio = 0.92;
+    ratio = 0.8;
   }
 };
 
-void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMatMat& flow, const OrbArgs& args)
+void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& flow, const OrbArgs& args);
 
 #endif
