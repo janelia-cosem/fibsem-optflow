@@ -48,7 +48,7 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 
 void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool orb, const OptflowArgs& args, const OrbArgs& orbargs);
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat flow_GPU, std::string output_dir, std::string out_name, const OptflowArgs& args);
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool orb, cv::Mat affine, const OptflowArgs& args);
 
 
 void TVL1_solve(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& output, const OptflowArgs& args); 

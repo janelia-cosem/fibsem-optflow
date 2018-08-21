@@ -5,14 +5,13 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudafeatures2d.hpp>
-#include <opencv2/cudawarping.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/cudaarithm.hpp>
 
 #include "orb_features.h"
 
 
-void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& flow, const OrbArgs& args)
+void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat& affine, const OrbArgs& args)
 {
   cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.nfeatures, args.scaleFactor, args.nlevels, args.edgeThreshold, args.firstLevel, args.WTA_K, 0, args.patchSize, args.fastThreshold, args.blurForDescriptor);
 
@@ -47,16 +46,16 @@ void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::
     }
   
   cv::Mat homo;
-  homo = cv::findHomography( points_0, points_1, cv::RHO );
+  std::cout << cv::RHO << " " << cv::RANSAC << "\n";
+  homo = cv::findHomography( points_0, points_1, args.homo );
   std::cout << homo.at<double>(0,0) << ' ' << homo.at<double>(0,1) << ' ' << homo.at<double>(0,2) << "\n" << homo.at<double>(1,0) << ' ' << homo.at<double>(1,1) << ' ' << homo.at<double>(1,2) << "\n" << homo.at<double>(2,0) << ' ' << homo.at<double>(2,1) << ' ' << homo.at<double>(2,2) << "\n";
-  cv::Mat affine;
   homo(cv::Range(0,2),cv::Range(0,3)).copyTo(affine);
-  cv::cuda::GpuMat flow_x, flow_y;
-  cv::cuda::buildWarpAffineMaps(affine, 0, frame0.size(), flow_x, flow_y);
-  std::vector< cv::cuda::GpuMat > flow_vec;
-  flow_vec.push_back(flow_x);
-  flow_vec.push_back(flow_y);
-  cv::cuda::merge(flow_vec, flow);
+  // cv::cuda::GpuMat flow_x, flow_y;
+  // cv::cuda::buildWarpAffineMaps(affine, 0, frame0.size(), flow_x, flow_y);
+  // std::vector< cv::cuda::GpuMat > flow_vec;
+  // flow_vec.push_back(flow_x);
+  // flow_vec.push_back(flow_y);
+  // cv::cuda::merge(flow_vec, flow);
 
 }
   

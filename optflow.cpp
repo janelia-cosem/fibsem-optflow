@@ -10,6 +10,8 @@
 #include "opencv2/highgui.hpp"
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaoptflow.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
 
 #include "orb_features.h"
 #include "optflow.h"
@@ -45,6 +47,7 @@ const std::string keys =
   "{ orbfast | | orb fast threshold}"
   "{ orbblur | | orb blur}"
   "{ orbratio | | orb ratio}"
+  "{ orbhomo | | orb homography method}"
   "{help h || show help message }"
   ;
 
@@ -67,19 +70,12 @@ int main(int argc, const char* argv[])
     int top = parser.get<int>( "top" );
     int bottom = parser.get<int>( "bottom" );
     int border = parser.get<int>("border");
-    bool orb;
+    bool orb=false;
     OptflowArgs args;
     OrbArgs orbargs;
     
     if (parser.has("tau")) args.tau = parser.get<double>( "tau" );
-    if (parser.has("lambda"))
-      {
-	args.lambda = parser.get<double>( "lambda" );
-      }
-    else
-      {
-	args.lambda = args.lambda/scale;
-      }
+    if (parser.has("lambda")) args.lambda = parser.get<double>( "lambda" );
     if (parser.has("theta")) args.theta = parser.get<double>( "theta" );
     if (parser.has("nscales")) args.nscales = parser.get<int>( "nscales" );
     if (parser.has("warps")) args.warps = parser.get<int>( "warps" );
@@ -90,7 +86,6 @@ int main(int argc, const char* argv[])
     if (parser.has("orb"))
       {
 	orb = true;
-	args.useInitialFlow = true;
       }
     if (parser.has("orbn")) orbargs.nfeatures = parser.get<int>( "orbn" );
     if (parser.has("orbscale")) orbargs.scaleFactor = parser.get<float>( "orbscale" );
@@ -102,7 +97,7 @@ int main(int argc, const char* argv[])
     if (parser.has("orbfast")) orbargs.fastThreshold = parser.get<int>( "orbfast" );
     if (parser.has("orbblur")) orbargs.blurForDescriptor = true;
     if (parser.has("orbratio")) orbargs.ratio = parser.get<float>( "orbratio" );
-    
+    if (parser.has("orbhomo")) orbargs.homo = parser.get<int>( "orbhomo");
     int pass_fail;
 
     if ( style == 0 && (frame0_name.empty() || frame1_name.empty() || file.empty()))
@@ -353,46 +348,96 @@ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::str
   cv::cuda::GpuMat frame0_GPU, frame1_GPU;
   frame0_GPU.upload(frame0);
   frame1_GPU.upload(frame1);
-  cv::cuda::GpuMat flow_GPU = frame0_GPU;
+  cv::cuda::GpuMat flow_GPU;
+  cv::cuda::GpuMat old_frame0 = frame0_GPU;
 
+  cv::Mat affine;
   if (orb)
     {
-      find_alignment(frame0_GPU, frame1_GPU, flow_GPU, orbargs);
+      cv::cuda::GpuMat new_frame0;
+      find_alignment(frame0_GPU, frame1_GPU, affine, orbargs);
+      cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
+      frame0_GPU = new_frame0;
     }
   if ( rois.size() == 1 )
     {
-      solve_wrapper(frame0_GPU, frame1_GPU, flow_GPU, output_dir, out_name, args);
+      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, orb, affine, args);
     }
   else
     {
       if ( rois.at(0).height > 0)
 	{
-	  cv::cuda::GpuMat sub_flow;
-	  sub_flow = flow_GPU(rois.at(0));
-	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), sub_flow, output_dir, out_name+"_top", args);
+	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", orb, affine, args);
 	}
       if ( rois.at(1).height > 0)
 	{
-	  cv::cuda::GpuMat sub_flow;
-	  sub_flow = flow_GPU(rois.at(1));
-	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), sub_flow, output_dir, out_name+"_bottom", args);
+	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", orb, affine, args);
 	}
+    }
+  if (orb)
+    {
+      frame0_GPU = old_frame0;
     }
 }
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat flow_GPU, std::string output_dir, std::string out_name, const OptflowArgs& args)
-{  
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool orb, cv::Mat affine, const OptflowArgs& args)
+{
+  cv::cuda::GpuMat flow_GPU;
   TVL1_solve(frame0, frame1, flow_GPU, args);
-  cv::Mat_<cv::Point2f> flow;
+  cv::cuda::GpuMat inv_x_GPU, inv_y_GPU;
 
-  flow_GPU.download(flow);
+  if (orb)
+    {
+      cv::cuda::buildWarpAffineMaps(affine, true, frame0.size(), inv_x_GPU, inv_y_GPU); //inverse
+    }
+  
   std::string file_x = output_dir+"/"+out_name+"_x.tiff";
   std::string file_y = output_dir+"/"+out_name+"_y.tiff";
-  std::vector<cv::Mat> flow_xy;
-  cv::split(flow, flow_xy);
   
-  imwrite(file_x, flow_xy[0]);
-  imwrite(file_y, flow_xy[1]);
+  std::vector<cv::cuda::GpuMat> flow_xy_GPU;
+  cv::cuda::split(flow_GPU,flow_xy_GPU);
+  cv::Mat flow_x, flow_y;
+  flow_xy_GPU[0].download(flow_x);
+  flow_xy_GPU[1].download(flow_y);
+  if (orb)
+    {
+      cv::Mat inv_x, inv_y;
+      inv_x_GPU.download(inv_x);
+      inv_y_GPU.download(inv_y);
+      cv::Mat map_x, map_y;
+      map_x.create(inv_x.size(), CV_32FC1);
+      map_y.create(inv_y.size(), CV_32FC1);
+      for(int j=0; j<inv_x.rows; j++)
+	{
+	  for ( int i=0; i < inv_x.cols; i++)
+	    {
+	      map_x.at<float>(j,i) = (float)i;
+	      map_y.at<float>(j,i) = (float)j;
+	    }
+	}
+      flow_x += inv_x - map_x;
+      flow_y += inv_y - map_y;
+      cv::Mat frame0_CPU;
+      cv::cuda::GpuMat frame0_remap;
+      cv::cuda::remap(frame0, frame0_remap, inv_x_GPU, inv_y_GPU, cv::INTER_LINEAR);
+      frame0_remap.download(frame0_CPU);
+      frame0_CPU.convertTo(frame0_CPU,CV_32FC1);
+      
+      for(int j=0; j<frame0_CPU.rows; j++)
+	{
+	  for( int i=0; i < frame0_CPU.cols; i++)
+	    {
+	      if (frame0_CPU.at<float>(j,i) == (float)0)
+		{
+		  flow_x.at<float>(j,i) = (float)0;
+		  flow_y.at<float>(j,i) = (float)0;
+		}
+	    }
+	}
+      
+    }
+  imwrite(file_x, flow_x);
+  imwrite(file_y, flow_y);
 }
 
 void TVL1_solve(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::cuda::GpuMat& output, const OptflowArgs& args)
