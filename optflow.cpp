@@ -13,7 +13,7 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
 
-#include "orb_features.h"
+#include "features.h"
 #include "optflow.h"
 
 
@@ -36,7 +36,7 @@ const std::string keys =
   "{ top | 0 | Size of top resin}"
   "{ bottom | 0 | Size of bottom resin}"
   "{ border | 0 | border}"
-  "{ orb | | Use orb features for initial flow }"
+  "{ feature | | type of feature }"
   "{ orbn | | orb nfeatures }"
   "{ orbscale | | orb scaleFactor }"
   "{ orbnlevels | | orb nlevels }"
@@ -46,8 +46,14 @@ const std::string keys =
   "{ orbpatch | | orb patchSize }"
   "{ orbfast | | orb fast threshold}"
   "{ orbblur | | orb blur}"
-  "{ orbratio | | orb ratio}"
-  "{ orbhomo | | orb homography method}"
+  "{ ratio | | feature ratio}"
+  "{ homo | | feature homography method}"
+  "{ surfhess | | surf hessianthreshold}"
+  "{ surfoct | | surf octaves}"
+  "{ surfoctL | | surf octave layers}"
+  "{ surfext | | surf extended}"
+  "{ surfkey | | surf keypoints ratio}"
+  "{ surfup | | surf upright?}"
   "{help h || show help message }"
   ;
 
@@ -70,9 +76,9 @@ int main(int argc, const char* argv[])
     int top = parser.get<int>( "top" );
     int bottom = parser.get<int>( "bottom" );
     int border = parser.get<int>("border");
-    bool orb=false;
+    bool features=false;
     OptflowArgs args;
-    OrbArgs orbargs;
+    FeatureArgs featureargs;
     
     if (parser.has("tau")) args.tau = parser.get<double>( "tau" );
     if (parser.has("lambda")) args.lambda = parser.get<double>( "lambda" );
@@ -83,21 +89,28 @@ int main(int argc, const char* argv[])
     if (parser.has("iterations")) args.iterations = parser.get<int>( "iterations" );
     if (parser.has("scaleStep")) args.scaleStep = parser.get<double>( "scaleStep" );
     if (parser.has("gamma")) args.gamma = parser.get<double>( "gamma" );
-    if (parser.has("orb"))
+    if (parser.has("feature"))
       {
-	orb = true;
+	featureargs.type = parser.get<int>( "feature" );
+	features = true;
       }
-    if (parser.has("orbn")) orbargs.nfeatures = parser.get<int>( "orbn" );
-    if (parser.has("orbscale")) orbargs.scaleFactor = parser.get<float>( "orbscale" );
-    if (parser.has("orbnlevels")) orbargs.nlevels = parser.get<int>( "orbnlevels" );
-    if (parser.has("orbedge")) orbargs.edgeThreshold = parser.get<int>( "orbedge" );
-    if (parser.has("orbfirst")) orbargs.firstLevel = parser.get<int>( "orbfirst" );
-    if (parser.has("orbWTA")) orbargs.WTA_K = parser.get<int>( "orbWTA" );
-    if (parser.has("orbpatch")) orbargs.patchSize = parser.get<int>( "orbpatch" );
-    if (parser.has("orbfast")) orbargs.fastThreshold = parser.get<int>( "orbfast" );
-    if (parser.has("orbblur")) orbargs.blurForDescriptor = true;
-    if (parser.has("orbratio")) orbargs.ratio = parser.get<float>( "orbratio" );
-    if (parser.has("orbhomo")) orbargs.homo = parser.get<int>( "orbhomo");
+    if (parser.has("orbn")) featureargs.orb_nfeatures = parser.get<int>( "orbn" );
+    if (parser.has("orbscale")) featureargs.orb_scaleFactor = parser.get<float>( "orbscale" );
+    if (parser.has("orbnlevels")) featureargs.orb_nlevels = parser.get<int>( "orbnlevels" );
+    if (parser.has("orbedge")) featureargs.orb_edgeThreshold = parser.get<int>( "orbedge" );
+    if (parser.has("orbfirst")) featureargs.orb_firstLevel = parser.get<int>( "orbfirst" );
+    if (parser.has("orbWTA")) featureargs.orb_WTA_K = parser.get<int>( "orbWTA" );
+    if (parser.has("orbpatch")) featureargs.orb_patchSize = parser.get<int>( "orbpatch" );
+    if (parser.has("orbfast")) featureargs.orb_fastThreshold = parser.get<int>( "orbfast" );
+    if (parser.has("orbblur")) featureargs.orb_blurForDescriptor = true;
+    if (parser.has("ratio")) featureargs.ratio = parser.get<float>( "ratio" );
+    if (parser.has("homo")) featureargs.homo = parser.get<int>( "homo");
+    if (parser.has("surfhess")) featureargs.surf_hessianThreshold = parser.get<double>( "surfhess");
+    if (parser.has("surfoct")) featureargs.surf_nOctaves = parser.get<int>( "surfoct");
+    if (parser.has("surfoctL")) featureargs.surf_nOctaveLayers = parser.get<int>( "surfoctL");
+    if (parser.has("surfext")) featureargs.surf_extended = true;
+    if (parser.has("surfkey")) featureargs.surf_keypointsRatio = parser.get<float>( "surfkey");
+    if (parser.has("surfup")) featureargs.surf_upright = true;
     int pass_fail;
 
     if ( style == 0 && (frame0_name.empty() || frame1_name.empty() || file.empty()))
@@ -113,11 +126,11 @@ int main(int argc, const char* argv[])
 
     if ( style == 0)
       {
-	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, orb, args, orbargs);
+	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, features, args, featureargs);
 	  }
     else if (style == 1)
       {
-	pass_fail = from_file(frame0_name, file, scale, top, bottom, orb, args, orbargs);
+	pass_fail = from_file(frame0_name, file, scale, top, bottom, features, args, featureargs);
       }
     else if (style == 2)
       {
@@ -126,7 +139,7 @@ int main(int argc, const char* argv[])
     return pass_fail;
 }
 
-int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
+int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
 
 
@@ -186,12 +199,12 @@ int two_file(std::string frame0_name, std::string frame1_name, std::string file,
 	roi_bottom.height= bottom;
 	rois.push_back(roi_bottom);
       }
-    solve_rois(frame0, frame1, output_dir, out_name, rois, orb, args, orbargs);
+    solve_rois(frame0, frame1, output_dir, out_name, rois, features, args, featureargs);
     
     return 0;
 }
 
-int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
+int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
   std::ifstream infile(file_name.c_str());
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
@@ -250,7 +263,7 @@ int from_file(std::string file_name, std::string output_dir, float scale, int to
 	  roi_bottom.height= bottom;
 	  rois.push_back(roi_bottom);
 	}
-      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, orb, args, orbargs);
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, features, args, featureargs);
     }
   
   return 0;
@@ -343,7 +356,7 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 }
 
 
-void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool orb, const OptflowArgs& args, const OrbArgs& orbargs)
+void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
   cv::cuda::GpuMat frame0_GPU, frame1_GPU;
   frame0_GPU.upload(frame0);
@@ -352,41 +365,41 @@ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::str
   cv::cuda::GpuMat old_frame0 = frame0_GPU;
 
   cv::Mat affine;
-  if (orb)
+  if (features)
     {
       cv::cuda::GpuMat new_frame0;
-      find_alignment(frame0_GPU, frame1_GPU, affine, orbargs);
+      find_alignment(frame0_GPU, frame1_GPU, affine, featureargs);
       cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
       frame0_GPU = new_frame0;
     }
   if ( rois.size() == 1 )
     {
-      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, orb, affine, args);
+      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, features, affine, args);
     }
   else
     {
       if ( rois.at(0).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", orb, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", features, affine, args);
 	}
       if ( rois.at(1).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", orb, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", features, affine, args);
 	}
     }
-  if (orb)
+  if (features)
     {
       frame0_GPU = old_frame0;
     }
 }
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool orb, cv::Mat affine, const OptflowArgs& args)
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool features, cv::Mat affine, const OptflowArgs& args)
 {
   cv::cuda::GpuMat flow_GPU;
   TVL1_solve(frame0, frame1, flow_GPU, args);
   cv::cuda::GpuMat inv_x_GPU, inv_y_GPU;
 
-  if (orb)
+  if (features)
     {
       cv::cuda::buildWarpAffineMaps(affine, true, frame0.size(), inv_x_GPU, inv_y_GPU); //inverse
     }
@@ -399,7 +412,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string
   cv::Mat flow_x, flow_y;
   flow_xy_GPU[0].download(flow_x);
   flow_xy_GPU[1].download(flow_y);
-  if (orb)
+  if (features)
     {
       cv::Mat inv_x, inv_y;
       inv_x_GPU.download(inv_x);

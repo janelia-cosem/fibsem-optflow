@@ -7,18 +7,28 @@
 #include <opencv2/cudafeatures2d.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/cudaarithm.hpp>
+#include <opencv2/xfeatures2d/cuda.hpp>
 
-#include "orb_features.h"
+#include "features.h"
 
 
-void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat& affine, const OrbArgs& args)
+void find_alignment(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat& affine, const FeatureArgs& args)
 {
-  cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.nfeatures, args.scaleFactor, args.nlevels, args.edgeThreshold, args.firstLevel, args.WTA_K, 0, args.patchSize, args.fastThreshold, args.blurForDescriptor);
-
   std::vector< cv::KeyPoint > keypoints_0, keypoints_1;
   cv::cuda::GpuMat descriptors_0_GPU, descriptors_1_GPU;
-  orb->detectAndCompute(frame0, cv::noArray(), keypoints_0, descriptors_0_GPU);
-  orb->detectAndCompute(frame1, cv::noArray(), keypoints_1, descriptors_1_GPU);
+  if (args.type==ORB_TYPE)
+    {
+      cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.orb_nfeatures, args.orb_scaleFactor, args.orb_nlevels, args.orb_edgeThreshold, args.orb_firstLevel, args.orb_WTA_K, 0, args.orb_patchSize, args.orb_fastThreshold, args.orb_blurForDescriptor);
+
+      orb->detectAndCompute(frame0, cv::noArray(), keypoints_0, descriptors_0_GPU);
+      orb->detectAndCompute(frame1, cv::noArray(), keypoints_1, descriptors_1_GPU);
+    }
+  else if (args.type==SURF_TYPE)
+    {
+      cv::cuda::SURF_CUDA surf;
+      surf(frame0, cv::cuda::GpuMat(), keypoints_0, descriptors_0_GPU);
+      surf(frame1, cv::cuda::GpuMat(), keypoints_1, descriptors_1_GPU);
+    }
 
 
   //Use k nearest neighbour matching, use two for ratio test
