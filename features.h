@@ -28,6 +28,7 @@ struct FeatureArgs
   bool surf_upright;
   int type;
   int homo;
+  double ransac;
   float ratio;
 
   FeatureArgs()
@@ -45,11 +46,12 @@ struct FeatureArgs
     surf_nOctaves =4;
     surf_nOctaveLayers = 2;
     surf_extended = false;
-    surf_keypointsRatio = 0.01;
+    surf_keypointsRatio = 0.01f;
     surf_upright = false;
     type = SURF_TYPE;
     ratio = 0.8;
     homo = cv::RANSAC; //4,8,16
+    ransac = 5.;
   }
 };
 

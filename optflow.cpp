@@ -4,14 +4,16 @@
 #include <deque>
 #include <vector>
 
+#include <opencv2/core/core.hpp>
 #include <opencv2/core/utility.hpp>
-#include "opencv2/video.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
+#include <opencv2/video.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaoptflow.hpp>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
+#include <opencv2/cudaimgproc.hpp>
 
 #include "features.h"
 #include "optflow.h"
@@ -37,6 +39,8 @@ const std::string keys =
   "{ bottom | 0 | Size of bottom resin}"
   "{ border | 0 | border}"
   "{ feature | | type of feature }"
+  "{ template | | use template matching}"
+  "{ temp_meth | | template method}"
   "{ orbn | | orb nfeatures }"
   "{ orbscale | | orb scaleFactor }"
   "{ orbnlevels | | orb nlevels }"
@@ -48,6 +52,7 @@ const std::string keys =
   "{ orbblur | | orb blur}"
   "{ ratio | | feature ratio}"
   "{ homo | | feature homography method}"
+  "{ ransac | | ransac threshold}"
   "{ surfhess | | surf hessianthreshold}"
   "{ surfoct | | surf octaves}"
   "{ surfoctL | | surf octave layers}"
@@ -76,6 +81,7 @@ int main(int argc, const char* argv[])
     int top = parser.get<int>( "top" );
     int bottom = parser.get<int>( "bottom" );
     int border = parser.get<int>("border");
+    bool use_template = false;
     bool features=false;
     OptflowArgs args;
     FeatureArgs featureargs;
@@ -89,6 +95,8 @@ int main(int argc, const char* argv[])
     if (parser.has("iterations")) args.iterations = parser.get<int>( "iterations" );
     if (parser.has("scaleStep")) args.scaleStep = parser.get<double>( "scaleStep" );
     if (parser.has("gamma")) args.gamma = parser.get<double>( "gamma" );
+    if (parser.has("template"))	use_template=true;
+    if (parser.has("temp_meth")) args.temp_method = parser.get<int>( "temp_method" );
     if (parser.has("feature"))
       {
 	featureargs.type = parser.get<int>( "feature" );
@@ -105,6 +113,7 @@ int main(int argc, const char* argv[])
     if (parser.has("orbblur")) featureargs.orb_blurForDescriptor = true;
     if (parser.has("ratio")) featureargs.ratio = parser.get<float>( "ratio" );
     if (parser.has("homo")) featureargs.homo = parser.get<int>( "homo");
+    if (parser.has("ransac")) featureargs.ransac = parser.get<double> ("ransac");
     if (parser.has("surfhess")) featureargs.surf_hessianThreshold = parser.get<double>( "surfhess");
     if (parser.has("surfoct")) featureargs.surf_nOctaves = parser.get<int>( "surfoct");
     if (parser.has("surfoctL")) featureargs.surf_nOctaveLayers = parser.get<int>( "surfoctL");
@@ -126,11 +135,11 @@ int main(int argc, const char* argv[])
 
     if ( style == 0)
       {
-	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, features, args, featureargs);
+	pass_fail = two_file(frame0_name, frame1_name, file, crop_width, scale, top, bottom, features, use_template, args, featureargs);
 	  }
     else if (style == 1)
       {
-	pass_fail = from_file(frame0_name, file, scale, top, bottom, features, args, featureargs);
+	pass_fail = from_file(frame0_name, file, scale, top, bottom, features,use_template, args, featureargs);
       }
     else if (style == 2)
       {
@@ -139,41 +148,52 @@ int main(int argc, const char* argv[])
     return pass_fail;
 }
 
-int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
+ int two_file(std::string frame0_name, std::string frame1_name, std::string file, int crop_width, float scale, int top, int bottom, bool features, bool use_template, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
 
 
-    cv::Mat frame0 = imread(frame0_name, cv::IMREAD_GRAYSCALE);
-    cv::Mat frame1 = imread(frame1_name, cv::IMREAD_GRAYSCALE);
+    cv::Mat orig_frame0 = imread(frame0_name, cv::IMREAD_GRAYSCALE);
+    cv::Mat orig_frame1 = imread(frame1_name, cv::IMREAD_GRAYSCALE);
+    cv::Mat frame0, frame1;
     if (frame1.size() != frame0.size())
       {
         std::cerr << "Images should be of equal sizes" << std::endl;
         return -1;
       }
 
+    cv::Rect roi_0;
+    cv::Rect roi_1;
+    roi_0.y = 0;
+    roi_1.y = 0;
+    roi_0.height = orig_frame0.rows;
+    roi_1.height = orig_frame1.rows;
     if (crop_width)
       {
-	cv::Rect roi_0;
-	cv::Rect roi_1;
-	roi_0.x = frame0.cols - crop_width;
+	roi_0.x = orig_frame0.cols - crop_width;
 	roi_1.x = 0;
-	roi_0.y = 0;
-	roi_1.y = 0;
 	roi_0.width = crop_width;
 	roi_1.width = crop_width;
-	roi_0.height = frame0.rows;
-	roi_1.height = frame1.rows;
-	frame0 = frame0(roi_0);
-	frame1 = frame1(roi_1);
+      }
+    else
+      {
+	roi_0.x = 0;
+	roi_1.x = 0;
+	roi_0.width = orig_frame0.cols;
+	roi_1.width = orig_frame1.cols;
       }
     if (scale != 1)
       {
-	resize(frame0, frame0, cv::Size(), scale, scale);
-	resize(frame1, frame1, cv::Size(), scale, scale);
+	cv::resize(orig_frame0(roi_0), frame0, cv::Size(), scale, scale, CV_INTER_LANCZOS4);
+	cv::resize(orig_frame1(roi_1), frame1, cv::Size(), scale, scale, CV_INTER_LANCZOS4);
       }
+    else
+      {
+	orig_frame0.copyTo(frame0);
+	orig_frame1.copyTo(frame1);
+      }
+
     cv::Rect roi_top, roi_bottom;
     std::vector< cv::Rect > rois;
-
     roi_top.x = 0;
     roi_bottom.x = 0;
     roi_top.width = frame0.cols;
@@ -199,12 +219,12 @@ int two_file(std::string frame0_name, std::string frame1_name, std::string file,
 	roi_bottom.height= bottom;
 	rois.push_back(roi_bottom);
       }
-    solve_rois(frame0, frame1, output_dir, out_name, rois, features, args, featureargs);
+    solve_rois(frame0, frame1, output_dir, out_name, rois, features, use_template, args, featureargs);
     
     return 0;
 }
 
-int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
+ int from_file(std::string file_name, std::string output_dir, float scale, int top, int bottom, bool features, bool use_template, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
   std::ifstream infile(file_name.c_str());
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
@@ -263,7 +283,7 @@ int from_file(std::string file_name, std::string output_dir, float scale, int to
 	  roi_bottom.height= bottom;
 	  rois.push_back(roi_bottom);
 	}
-      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, features, args, featureargs);
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, features, use_template, args, featureargs);
     }
   
   return 0;
@@ -356,16 +376,42 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 }
 
 
-void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool features, const OptflowArgs& args, const FeatureArgs& featureargs)
+ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::string out_name, std::vector<cv::Rect> rois, bool features, bool use_template, const OptflowArgs& args, const FeatureArgs& featureargs)
 {
   cv::cuda::GpuMat frame0_GPU, frame1_GPU;
   frame0_GPU.upload(frame0);
   frame1_GPU.upload(frame1);
   cv::cuda::GpuMat flow_GPU;
   cv::cuda::GpuMat old_frame0 = frame0_GPU;
+  cv::Mat affine(cv::Size(3,2), CV_32FC1);
+  double offset_x, offset_y;
+  if (use_template)
+    {
+      cv::cuda::GpuMat new_frame0;
+      cv::cuda::GpuMat min_max;
+      cv::Ptr<cv::cuda::TemplateMatching> matcher = cv::cuda::createTemplateMatching(CV_8U, args.temp_method, cv::Size(0,0));
+      cv::Rect match_region(frame0_GPU.cols-50,frame0_GPU.rows/2,50,50);
+      cv::cuda::GpuMat im_template(frame0_GPU(match_region));
+      matcher -> match(frame1_GPU, im_template, min_max);
+      double minval, maxval;
+      cv::Point minlocation, maxlocation;
+      cv::cuda::minMaxLoc(min_max, &minval, &maxval, &minlocation, &maxlocation);
+      cv::Point2f matchlocation;
+      if( args.temp_method  == CV_TM_SQDIFF || args.temp_method == CV_TM_SQDIFF_NORMED )
+	{ matchlocation = minlocation; }
+      else
+	{ matchlocation = maxlocation; }
+      std::cout << matchlocation << "\n";
+      affine.at<float>(0,0) = 1;
+      affine.at<float>(0,1) = 0;
+      affine.at<float>(0,2) = matchlocation.x - frame0_GPU.cols + 50;
+      affine.at<float>(1,0) = 0;
+      affine.at<float>(1,1) = 1;
+      affine.at<float>(1,2) = matchlocation.y - frame0_GPU.rows/2;
+      cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
 
-  cv::Mat affine;
-  if (features)
+    }
+  else if (features)
     {
       cv::cuda::GpuMat new_frame0;
       find_alignment(frame0_GPU, frame1_GPU, affine, featureargs);
@@ -374,32 +420,32 @@ void solve_rois(cv::Mat frame0, cv::Mat frame1, std::string output_dir, std::str
     }
   if ( rois.size() == 1 )
     {
-      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, features, affine, args);
+      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, features, use_template, affine, args);
     }
   else
     {
       if ( rois.at(0).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", features, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", features, use_template, affine, args);
 	}
       if ( rois.at(1).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", features, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", features, use_template, affine, args);
 	}
     }
-  if (features)
+  if (features || use_template)
     {
       frame0_GPU = old_frame0;
     }
 }
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool features, cv::Mat affine, const OptflowArgs& args)
+ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string output_dir, std::string out_name, bool features, bool use_template, cv::Mat affine, const OptflowArgs& args)
 {
   cv::cuda::GpuMat flow_GPU;
   TVL1_solve(frame0, frame1, flow_GPU, args);
   cv::cuda::GpuMat inv_x_GPU, inv_y_GPU;
 
-  if (features)
+  if (features || use_template)
     {
       cv::cuda::buildWarpAffineMaps(affine, true, frame0.size(), inv_x_GPU, inv_y_GPU); //inverse
     }
@@ -412,7 +458,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, std::string
   cv::Mat flow_x, flow_y;
   flow_xy_GPU[0].download(flow_x);
   flow_xy_GPU[1].download(flow_y);
-  if (features)
+  if (features || use_template)
     {
       cv::Mat inv_x, inv_y;
       inv_x_GPU.download(inv_x);
