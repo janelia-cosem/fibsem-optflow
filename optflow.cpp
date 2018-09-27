@@ -163,6 +163,7 @@ int main(int argc, const char* argv[])
 
     cv::Rect roi_0;
     cv::Rect roi_1;
+    
     roi_0.y = 0;
     roi_1.y = 0;
     roi_0.height = orig_frame0.rows;
@@ -192,33 +193,76 @@ int main(int argc, const char* argv[])
 	orig_frame1.copyTo(frame1);
       }
 
-    cv::Rect roi_top, roi_bottom;
+    cv::Rect roi_top_0, roi_top_1, roi_bottom_0, roi_bottom_1;
     std::vector< cv::Rect > rois;
-    roi_top.x = 0;
-    roi_bottom.x = 0;
-    roi_top.width = frame0.cols;
-    roi_bottom.width = frame0.cols;
-    roi_top.height = 0; //bottom isn't used if not flagged so don't need to initialise
+    if (frame0.cols == frame1.cols)
+	{
+	  roi_top_0.x = 0;
+	  roi_bottom_0.x = 0;
+	  roi_top_0.width = frame0.cols;
+	  roi_bottom_0.width = frame0.cols;
+	  roi_top_0.height = 0; 
+	  roi_top_1.x = 0;
+	  roi_bottom_1.x = 0;
+	  roi_top_1.width = frame0.cols;
+	  roi_bottom_1.width = frame0.cols;
+	  roi_top_1.height = 0; 
+	}
+      else if (frame0.cols > frame1.cols)
+	{
+	  roi_top_0.x = (frame0.cols-frame1.cols)/2;
+	  roi_top_0.width = frame1.cols;
+	  roi_top_1.x = 0;
+	  roi_top_1.width = frame1.cols;
+	  roi_bottom_0.x = (frame0.cols-frame1.cols)/2;
+	  roi_bottom_0.width = frame1.cols;
+	  roi_bottom_1.x = 0;
+	  roi_bottom_1.width = frame1.cols;
+	}
+      else
+	{
+	  roi_top_1.x = (frame1.cols-frame0.cols)/2;
+	  roi_top_1.width = frame0.cols;
+	  roi_top_0.x = 0;
+	  roi_top_0.width = frame0.cols;
+	  roi_bottom_1.x = (frame1.cols-frame0.cols)/2;
+	  roi_bottom_1.width = frame0.cols;
+	  roi_bottom_0.x = 0;
+	  roi_bottom_0.width = frame0.cols;
+	}
+    
     top = top*scale;
     bottom = bottom*scale;
     std::string output_dir = "";
     std::string out_name = file;
-    if (!top)
-      {
-	rois.push_back(roi_top);
-      }
-    else
-      {
-	roi_top.y = 0;
-	roi_top.height = top;
-	rois.push_back(roi_top);
-      }
-    if (bottom)
-      {
-	roi_bottom.y = frame0.rows-bottom;
-	roi_bottom.height= bottom;
-	rois.push_back(roi_bottom);
-      }
+          if (!top)
+	{
+	  roi_top_0.y = 0;
+	  roi_top_0.height = frame0.rows;
+	  roi_top_1.y = 0;
+	  roi_top_1.height = frame1.rows;
+	  rois.push_back(roi_top_0);
+	  rois.push_back(roi_top_1);
+	  
+	}
+      else
+	{
+	  roi_top_0.y = 0;
+	  roi_top_0.height = top;
+	  roi_top_1.y = 0;
+	  roi_top_1.height = top;
+	  rois.push_back(roi_top_0);
+	  rois.push_back(roi_top_1);
+	}
+      if (bottom)
+	{
+	  roi_bottom_0.y = frame0.rows-bottom;
+	  roi_bottom_0.height= bottom;
+	  roi_bottom_1.y = frame0.rows-bottom;
+	  roi_bottom_1.height= bottom;
+	  rois.push_back(roi_bottom_0);
+	  rois.push_back(roi_bottom_1);
+	}
     solve_rois(frame0, frame1, output_dir, out_name, rois, features, use_template, args, featureargs);
     
     return 0;
@@ -229,9 +273,10 @@ int main(int argc, const char* argv[])
   std::ifstream infile(file_name.c_str());
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
   cv::Mat frame0, frame1;
+  bool temp_features;
+  char buffer[200];
   top = top*scale;
   bottom = bottom*scale;
-      
   while (infile >> frame0_name >> frame1_name >> out_name)
     {
       printf("%s %s\n", frame0_name.c_str(), frame1_name.c_str());
@@ -255,35 +300,91 @@ int main(int argc, const char* argv[])
 	}
       old_frame0 = frame0_name;
       old_frame1 = frame1_name;
-      cv::Rect roi_top, roi_bottom;
+      cv::Rect roi_top_0, roi_top_1, roi_bottom_0, roi_bottom_1;
       std::vector< cv::Rect > rois;
-      
-      roi_top.x = 0;
-      roi_bottom.x = 0;
-      roi_top.width = frame0.cols;
-      roi_bottom.width = frame0.cols;
-      roi_top.height = 0; //bottom isn't used if not flagged so don't need to initialise
-      top = top*scale;
-      bottom = bottom*scale;
-      std::string output_dir = "";
-      std::string out_name = file_name;
-      if (!top)
+      if (frame0.cols == frame1.cols)
 	{
-	  rois.push_back(roi_top);
+	  roi_top_0.x = 0;
+	  roi_bottom_0.x = 0;
+	  roi_top_0.width = frame0.cols;
+	  roi_bottom_0.width = frame0.cols;
+	  roi_top_0.height = 0; 
+	  roi_top_1.x = 0;
+	  roi_bottom_1.x = 0;
+	  roi_top_1.width = frame0.cols;
+	  roi_bottom_1.width = frame0.cols;
+	  roi_top_1.height = 0;
+	  temp_features = features;
+	}
+      else if (frame0.cols > frame1.cols)
+	{
+	  roi_top_0.x = (frame0.cols-frame1.cols)/2;
+	  roi_top_0.width = frame1.cols;
+	  roi_top_1.x =  0;
+	  roi_top_1.width = frame1.cols;
+	  temp_features = true;
 	}
       else
 	{
-	  roi_top.y = 0;
-	  roi_top.height = top;
-	  rois.push_back(roi_top);
+	  roi_top_1.x = (frame1.cols-frame0.cols)/2;
+	  roi_top_1.width = frame0.cols;
+	  roi_top_0.x = 0;
+	  roi_top_0.width = frame0.cols;
+	  temp_features = true;
 	}
-      if (bottom)
+      if ( frame0.rows > frame1.rows )
 	{
-	  roi_bottom.y = frame0.rows-bottom;
-	  roi_bottom.height= bottom;
-	  rois.push_back(roi_bottom);
+	  roi_top_0.y = (frame0.rows-frame1.rows)/2;
+	  roi_top_0.width = frame1.rows;
+	  roi_top_1.y = 0;
+	  roi_top_1.width = frame1.rows;
 	}
-      solve_rois(frame0, frame1, output_dir, out_name+"_"+std::to_string(scale), rois, features, use_template, args, featureargs);
+      else if ( frame1.rows > frame0.rows )
+	{
+	  roi_top_1.y = (frame1.rows-frame0.rows)/2;
+	  roi_top_1.width = frame0.rows;
+	  roi_top_0.y = 0;
+	  roi_top_0.width = frame0.rows;
+	}
+      if (!top || frame0.cols != frame1.cols)
+	{
+	  roi_top_0.y = 0;
+	  roi_top_0.height = frame0.rows;
+	  roi_top_1.y = 0;
+	  roi_top_1.height = frame1.rows;
+	  rois.push_back(roi_top_0);
+	  rois.push_back(roi_top_1);
+	}
+      else if ( !top && frame0.rows != frame1.rows)
+	{
+	  roi_top_0.y = 0;
+	  roi_top_0.height = frame0.rows;
+	  roi_top_1.y = 0;
+	  roi_top_1.height = frame1.rows;
+	  rois.push_back(roi_top_0);
+	  rois.push_back(roi_top_1);
+	}
+      else
+	{
+	  roi_top_0.y = 0;
+	  roi_top_0.height = top;
+	  roi_top_1.y = 0;
+	  roi_top_1.height = top;
+	  rois.push_back(roi_top_0);
+	  rois.push_back(roi_top_1);
+	}
+      if (bottom && frame0.cols == frame1.cols && frame0.rows == frame1.rows)
+	{
+	  roi_bottom_0.y = frame0.rows-bottom;
+	  roi_bottom_0.height= bottom;
+	  roi_bottom_1.y = frame0.rows-bottom;
+	  roi_bottom_1.height= bottom;
+	  rois.push_back(roi_bottom_0);
+	  rois.push_back(roi_bottom_1);
+	}
+      std::sprintf(buffer, "%0.2f", scale);
+
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+buffer, rois, temp_features, use_template, args, featureargs);
     }
   
   return 0;
@@ -413,24 +514,25 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
     }
   else if (features)
     {
+
       cv::cuda::GpuMat new_frame0;
-      find_alignment(frame0_GPU, frame1_GPU, affine, featureargs);
+      find_alignment(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(1)), affine, featureargs);
       cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
       frame0_GPU = new_frame0;
     }
-  if ( rois.size() == 1 )
+  if ( rois.size() == 2 )
     {
-      solve_wrapper(frame0_GPU, frame1_GPU, output_dir, out_name, features, use_template, affine, args);
+      solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(1)), output_dir, out_name, features, use_template, affine, args);
     }
   else
     {
       if ( rois.at(0).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(0)), output_dir, out_name+"_top", features, use_template, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(1)), output_dir, out_name+"_top", features, use_template, affine, args);
 	}
       if ( rois.at(1).height > 0)
 	{
-	  solve_wrapper(frame0_GPU(rois.at(1)), frame1_GPU(rois.at(1)), output_dir, out_name+"_bottom", features, use_template, affine, args);
+	  solve_wrapper(frame0_GPU(rois.at(2)), frame1_GPU(rois.at(3)), output_dir, out_name+"_bottom", features, use_template, affine, args);
 	}
     }
   if (features || use_template)

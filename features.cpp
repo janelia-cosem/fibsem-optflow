@@ -37,7 +37,7 @@ cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.orb_nfeatures, args.o
       pad_rows = (64 - frame0.rows % 64) % 64;
       cv::cuda::GpuMat frame0_surf, frame1_surf;
       cv::cuda::copyMakeBorder(frame0,frame0_surf,0,pad_rows,0,pad_cols,cv::BORDER_REFLECT_101);
-      cv::cuda::copyMakeBorder(frame1,frame1_surf,0,pad_rows,0,pad_cols,cv::BORDER_REFLECT_101,0);
+      cv::cuda::copyMakeBorder(frame1,frame1_surf,0,pad_rows,0,pad_cols,cv::BORDER_REFLECT_101);
       cv::cuda::SURF_CUDA surf;
       surf.hessianThreshold = args.surf_hessianThreshold;
       surf.nOctaves = args.surf_nOctaves;
@@ -45,8 +45,12 @@ cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.orb_nfeatures, args.o
       surf.extended = args.surf_extended;
       surf.upright = args.surf_upright;
       surf.keypointsRatio = args.surf_keypointsRatio;
+      std::cout << "Setting up " << frame0_surf.cols << " " << frame1_surf.cols << "\n";
       surf(frame0_surf, cv::cuda::GpuMat(), keypoints_0_GPU, descriptors_0_GPU);
+      std::cout << "Done one\n";
       surf(frame1_surf, cv::cuda::GpuMat(), keypoints_1_GPU, descriptors_1_GPU);
+      std::cout << "Done two\n";
+
       norm = surf.defaultNorm();
 
       surf.downloadKeypoints(keypoints_0_GPU, keypoints_0);
