@@ -5,6 +5,8 @@ Repository related to optical flow calculations for fibsem images
 ## Requirements
 
 opencv
+opencv - non-free
+cuda
 
 ## Basic build
 ```
@@ -12,4 +14,4 @@ g++ -ggdb optflow.cpp features.cpp -o optflow `pkg-config --cflags --libs opencv
 ```
 ## Hints
 
-Basic resin should use dual TV-L1. The sparse one isn't well configured yet either.
+Only TV L-1 is done. Sparse is too iffy on resin.
