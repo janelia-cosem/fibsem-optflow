@@ -1,0 +1,10 @@
+#Main program
+optflow
+
+#Compiled objects
+*.o
+
+#Emacs objects
+*~
+
+
