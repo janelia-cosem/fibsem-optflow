@@ -8,7 +8,7 @@ opencv
 
 ## Basic build
 
-g++ -ggdb optflow.cpp -o optflow `pkg-config --cflags --libs opencv` -lgsl -lblas
+g++ -ggdb optflow.cpp features.cpp -o optflow `pkg-config --cflags --libs opencv` -lgsl -lblas -lpng -std=c++11
 
 ## Hints
 
