@@ -121,8 +121,8 @@ cv::Ptr< cv::cuda::ORB >  orb = cv::cuda::ORB::create(args.orb_nfeatures, args.o
   // 	}
   //   }
   
-  
-  std::cout << "Number of features: " << good.size() << "\n";
+  std::cout << "Number of features: " << matches.size() << "\n";
+  std::cout << "Number of good features: " << good.size() << "\n";
   std::vector< cv::Point2f > points_0, points_1;
   for (int i=0; i < good.size(); i++)
     {

@@ -335,16 +335,21 @@ int main(int argc, const char* argv[])
       if ( frame0.rows > frame1.rows )
 	{
 	  roi_top_0.y = (frame0.rows-frame1.rows)/2;
-	  roi_top_0.width = frame1.rows;
+	  roi_top_0.height = frame1.rows;
 	  roi_top_1.y = 0;
-	  roi_top_1.width = frame1.rows;
+	  roi_top_1.height = frame1.rows;
+	  temp_features = true;
+	  std::cout << "New rois: " << roi_top_0.y << " " << roi_top_0.height << "\n";
+
 	}
       else if ( frame1.rows > frame0.rows )
 	{
 	  roi_top_1.y = (frame1.rows-frame0.rows)/2;
-	  roi_top_1.width = frame0.rows;
+	  roi_top_1.height = frame0.rows;
 	  roi_top_0.y = 0;
-	  roi_top_0.width = frame0.rows;
+	  roi_top_0.height = frame0.rows;
+	  std::cout << "New rois: " << roi_top_1.y << " " << roi_top_1.height << "\n";
+	  temp_features = true;
 	}
       if (!top || frame0.cols != frame1.cols)
 	{
@@ -355,14 +360,11 @@ int main(int argc, const char* argv[])
 	  rois.push_back(roi_top_0);
 	  rois.push_back(roi_top_1);
 	}
-      else if ( !top && frame0.rows != frame1.rows)
+      else if ( !top || frame0.rows != frame1.rows)
 	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
 	  rois.push_back(roi_top_0);
 	  rois.push_back(roi_top_1);
+	  
 	}
       else
 	{
