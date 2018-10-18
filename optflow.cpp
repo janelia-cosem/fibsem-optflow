@@ -3,6 +3,7 @@
 #include <string>
 #include <deque>
 #include <vector>
+#include <algorithm> 
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/utility.hpp>
@@ -17,51 +18,7 @@
 
 #include "features.h"
 #include "optflow.h"
-
-
-const std::string keys =
-  "{ @output | | output flow}"
-  "{ @frame0 | | frame 0}"
-  "{ frame1 | | frame}"
-  "{ crop | 0 | crop size}"
-  "{ style | 0 | style}"
-  "{ scale | 1 | scale}"
-  "{ tau | | tau}"
-  "{ lambda | | lambda}"
-  "{ theta | | theta}"
-  "{ nscales | | nscales}"
-  "{ warps | | warps}"
-  "{ epsilon | | epsilon}"
-  "{ iterations | | iterations}"
-  "{ scaleStep | | scaleStep}"
-  "{ gamma | | gamma}"
-  "{ top | 0 | Size of top resin}"
-  "{ bottom | 0 | Size of bottom resin}"
-  "{ border | 0 | border}"
-  "{ feature | | type of feature }"
-  "{ template | | use template matching}"
-  "{ temp_meth | | template method}"
-  "{ orbn | | orb nfeatures }"
-  "{ orbscale | | orb scaleFactor }"
-  "{ orbnlevels | | orb nlevels }"
-  "{ orbedge | | orb edgeThreshold }"
-  "{ orbfirst | | orb firstLevel }"
-  "{ orbWTA | | orb WTA_K factor }"
-  "{ orbpatch | | orb patchSize }"
-  "{ orbfast | | orb fast threshold}"
-  "{ orbblur | | orb blur}"
-  "{ ratio | | feature ratio}"
-  "{ homo | | feature homography method}"
-  "{ ransac | | ransac threshold}"
-  "{ surfhess | | surf hessianthreshold}"
-  "{ surfoct | | surf octaves}"
-  "{ surfoctL | | surf octave layers}"
-  "{ surfext | | surf extended}"
-  "{ surfkey | | surf keypoints ratio}"
-  "{ surfup | | surf upright?}"
-  "{help h || show help message }"
-  ;
-
+#include "parser.h"
 
 int main(int argc, const char* argv[])
 {
@@ -85,41 +42,9 @@ int main(int argc, const char* argv[])
     bool features=false;
     OptflowArgs args;
     FeatureArgs featureargs;
-    
-    if (parser.has("tau")) args.tau = parser.get<double>( "tau" );
-    if (parser.has("lambda")) args.lambda = parser.get<double>( "lambda" );
-    if (parser.has("theta")) args.theta = parser.get<double>( "theta" );
-    if (parser.has("nscales")) args.nscales = parser.get<int>( "nscales" );
-    if (parser.has("warps")) args.warps = parser.get<int>( "warps" );
-    if (parser.has("epsilon")) args.epsilon = parser.get<double>( "epsilon" );
-    if (parser.has("iterations")) args.iterations = parser.get<int>( "iterations" );
-    if (parser.has("scaleStep")) args.scaleStep = parser.get<double>( "scaleStep" );
-    if (parser.has("gamma")) args.gamma = parser.get<double>( "gamma" );
-    if (parser.has("template"))	use_template=true;
-    if (parser.has("temp_meth")) args.temp_method = parser.get<int>( "temp_method" );
-    if (parser.has("feature"))
-      {
-	featureargs.type = parser.get<int>( "feature" );
-	features = true;
-      }
-    if (parser.has("orbn")) featureargs.orb_nfeatures = parser.get<int>( "orbn" );
-    if (parser.has("orbscale")) featureargs.orb_scaleFactor = parser.get<float>( "orbscale" );
-    if (parser.has("orbnlevels")) featureargs.orb_nlevels = parser.get<int>( "orbnlevels" );
-    if (parser.has("orbedge")) featureargs.orb_edgeThreshold = parser.get<int>( "orbedge" );
-    if (parser.has("orbfirst")) featureargs.orb_firstLevel = parser.get<int>( "orbfirst" );
-    if (parser.has("orbWTA")) featureargs.orb_WTA_K = parser.get<int>( "orbWTA" );
-    if (parser.has("orbpatch")) featureargs.orb_patchSize = parser.get<int>( "orbpatch" );
-    if (parser.has("orbfast")) featureargs.orb_fastThreshold = parser.get<int>( "orbfast" );
-    if (parser.has("orbblur")) featureargs.orb_blurForDescriptor = true;
-    if (parser.has("ratio")) featureargs.ratio = parser.get<float>( "ratio" );
-    if (parser.has("homo")) featureargs.homo = parser.get<int>( "homo");
-    if (parser.has("ransac")) featureargs.ransac = parser.get<double> ("ransac");
-    if (parser.has("surfhess")) featureargs.surf_hessianThreshold = parser.get<double>( "surfhess");
-    if (parser.has("surfoct")) featureargs.surf_nOctaves = parser.get<int>( "surfoct");
-    if (parser.has("surfoctL")) featureargs.surf_nOctaveLayers = parser.get<int>( "surfoctL");
-    if (parser.has("surfext")) featureargs.surf_extended = true;
-    if (parser.has("surfkey")) featureargs.surf_keypointsRatio = parser.get<float>( "surfkey");
-    if (parser.has("surfup")) featureargs.surf_upright = true;
+
+    //Use a separate function for the parameters since it quickly clogs the main function
+    parse_parameters(parser, features, use_template, args, featureargs);
     int pass_fail;
 
     if ( style == 0 && (frame0_name.empty() || frame1_name.empty() || file.empty()))
@@ -155,33 +80,7 @@ int main(int argc, const char* argv[])
     cv::Mat orig_frame0 = imread(frame0_name, cv::IMREAD_GRAYSCALE);
     cv::Mat orig_frame1 = imread(frame1_name, cv::IMREAD_GRAYSCALE);
     cv::Mat frame0, frame1;
-    if (frame1.size() != frame0.size())
-      {
-        std::cerr << "Images should be of equal sizes" << std::endl;
-        return -1;
-      }
 
-    cv::Rect roi_0;
-    cv::Rect roi_1;
-    
-    roi_0.y = 0;
-    roi_1.y = 0;
-    roi_0.height = orig_frame0.rows;
-    roi_1.height = orig_frame1.rows;
-    if (crop_width)
-      {
-	roi_0.x = orig_frame0.cols - crop_width;
-	roi_1.x = 0;
-	roi_0.width = crop_width;
-	roi_1.width = crop_width;
-      }
-    else
-      {
-	roi_0.x = 0;
-	roi_1.x = 0;
-	roi_0.width = orig_frame0.cols;
-	roi_1.width = orig_frame1.cols;
-      }
     if (scale != 1)
       {
 	cv::resize(orig_frame0(roi_0), frame0, cv::Size(), scale, scale, CV_INTER_LANCZOS4);
@@ -193,75 +92,32 @@ int main(int argc, const char* argv[])
 	orig_frame1.copyTo(frame1);
       }
 
-    cv::Rect roi_top_0, roi_top_1, roi_bottom_0, roi_bottom_1;
+    cv::Rect roi_top, roi_bottom;
     std::vector< cv::Rect > rois;
-    if (frame0.cols == frame1.cols)
-	{
-	  roi_top_0.x = 0;
-	  roi_bottom_0.x = 0;
-	  roi_top_0.width = frame0.cols;
-	  roi_bottom_0.width = frame0.cols;
-	  roi_top_0.height = 0; 
-	  roi_top_1.x = 0;
-	  roi_bottom_1.x = 0;
-	  roi_top_1.width = frame0.cols;
-	  roi_bottom_1.width = frame0.cols;
-	  roi_top_1.height = 0; 
-	}
-      else if (frame0.cols > frame1.cols)
-	{
-	  roi_top_0.x = (frame0.cols-frame1.cols)/2;
-	  roi_top_0.width = frame1.cols;
-	  roi_top_1.x = 0;
-	  roi_top_1.width = frame1.cols;
-	  roi_bottom_0.x = (frame0.cols-frame1.cols)/2;
-	  roi_bottom_0.width = frame1.cols;
-	  roi_bottom_1.x = 0;
-	  roi_bottom_1.width = frame1.cols;
-	}
-      else
-	{
-	  roi_top_1.x = (frame1.cols-frame0.cols)/2;
-	  roi_top_1.width = frame0.cols;
-	  roi_top_0.x = 0;
-	  roi_top_0.width = frame0.cols;
-	  roi_bottom_1.x = (frame1.cols-frame0.cols)/2;
-	  roi_bottom_1.width = frame0.cols;
-	  roi_bottom_0.x = 0;
-	  roi_bottom_0.width = frame0.cols;
-	}
-    
+    roi_top.x = 0;
+    roi_top.width = std::min(frame0.cols, frame1.cols);
+    roi_top.y = 0;
+    roi_bottom.x = 0;
+    roi_bottom.width = std::min(frame0.cols, frame1.cols);
+
     top = top*scale;
     bottom = bottom*scale;
     std::string output_dir = "";
     std::string out_name = file;
-          if (!top)
+    if (!top)
 	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
-	  rois.push_back(roi_top_0);
-	  rois.push_back(roi_top_1);
-	  
+	  rois.push_back(roi_top);	  
 	}
-      else
+    else
 	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = top;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = top;
-	  rois.push_back(roi_top_0);
-	  rois.push_back(roi_top_1);
+	  roi_top.height = top;
+	  rois.push_back(roi_top);
 	}
-      if (bottom)
+    if (bottom)
 	{
-	  roi_bottom_0.y = frame0.rows-bottom;
-	  roi_bottom_0.height= bottom;
-	  roi_bottom_1.y = frame0.rows-bottom;
-	  roi_bottom_1.height= bottom;
-	  rois.push_back(roi_bottom_0);
-	  rois.push_back(roi_bottom_1);
+	  roi_bottom.y = min(frame0.rows, frame1.rows) - bottom;
+	  roi_bottom.height= bottom;
+	  rois.push_back(roi_bottom);
 	}
     solve_rois(frame0, frame1, output_dir, out_name, rois, features, use_template, args, featureargs);
     
@@ -273,7 +129,6 @@ int main(int argc, const char* argv[])
   std::ifstream infile(file_name.c_str());
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
   cv::Mat frame0, frame1;
-  bool temp_features;
   char buffer[200];
   top = top*scale;
   bottom = bottom*scale;
@@ -302,92 +157,31 @@ int main(int argc, const char* argv[])
       old_frame1 = frame1_name;
       cv::Rect roi_top_0, roi_top_1, roi_bottom_0, roi_bottom_1;
       std::vector< cv::Rect > rois;
-      if (frame0.cols == frame1.cols)
+      roi_top.x = 0;
+      roi_top.width = std::min(frame0.cols, frame1.cols);
+      roi_top.y = 0;
+      roi_bottom.x = 0;
+      roi_bottom.width = std::min(frame0.cols, frame1.cols);
+      
+      if (!top)
 	{
-	  roi_top_0.x = 0;
-	  roi_bottom_0.x = 0;
-	  roi_top_0.width = frame0.cols;
-	  roi_bottom_0.width = frame0.cols;
-	  roi_top_0.height = 0; 
-	  roi_top_1.x = 0;
-	  roi_bottom_1.x = 0;
-	  roi_top_1.width = frame0.cols;
-	  roi_bottom_1.width = frame0.cols;
-	  roi_top_1.height = 0;
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
-	  temp_features = features;
-	}
-      else if (frame0.cols > frame1.cols)
-	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
-	  roi_top_0.x = (frame0.cols-frame1.cols)/2;
-	  roi_top_0.width = frame1.cols;
-	  roi_top_1.x =  0;
-	  roi_top_1.width = frame1.cols;
-	  temp_features = true;
+	  rois.push_back(roi_top);	  
 	}
       else
 	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
-	  roi_top_1.x = (frame1.cols-frame0.cols)/2;
-	  roi_top_1.width = frame0.cols;
-	  roi_top_0.x = 0;
-	  roi_top_0.width = frame0.cols;
-	  temp_features = true;
+	  roi_top.height = top;
+	  rois.push_back(roi_top);
 	}
-      if ( frame0.rows > frame1.rows )
+      if (bottom)
 	{
-	  roi_top_0.y = (frame0.rows-frame1.rows)/2;
-	  roi_top_0.height = frame1.rows;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = frame1.rows;
-	  temp_features = true;
-
+	  roi_bottom.y = min(frame0.rows, frame1.rows) - bottom;
+	  roi_bottom.height= bottom;
+	  rois.push_back(roi_bottom);
 	}
-      else if ( frame1.rows > frame0.rows )
-	{
-	  roi_top_1.y = (frame1.rows-frame0.rows)/2;
-	  roi_top_1.height = frame0.rows;
-	  roi_top_0.y = 0;
-	  roi_top_0.height = frame0.rows;
-	  temp_features = true;
-	}
-      if (!top || frame0.cols != frame1.cols || frame0.rows != frame1.rows)
-	{
-
-	  rois.push_back(roi_top_0);
-	  rois.push_back(roi_top_1);
-	}
-      else
-	{
-	  roi_top_0.y = 0;
-	  roi_top_0.height = top;
-	  roi_top_1.y = 0;
-	  roi_top_1.height = top;
-	  rois.push_back(roi_top_0);
-	  rois.push_back(roi_top_1);
-	}
-      if (bottom && frame0.cols == frame1.cols && frame0.rows == frame1.rows)
-	{
-	  roi_bottom_0.y = frame0.rows-bottom;
-	  roi_bottom_0.height= bottom;
-	  roi_bottom_1.y = frame0.rows-bottom;
-	  roi_bottom_1.height= bottom;
-	  rois.push_back(roi_bottom_0);
-	  rois.push_back(roi_bottom_1);
-	}
+ 
       std::sprintf(buffer, "%0.2f", scale);
 
-      solve_rois(frame0, frame1, output_dir, out_name+"_"+buffer, rois, temp_features, use_template, args, featureargs);
+      solve_rois(frame0, frame1, output_dir, out_name+"_"+buffer, rois, features, use_template, args, featureargs);
     }
   
   return 0;
@@ -491,12 +285,12 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
   double offset_x, offset_y;
   if (use_template)
     {
-      cv::cuda::GpuMat new_frame0;
+      cv::cuda::GpuMat new_frame1;
       cv::cuda::GpuMat min_max;
       cv::Ptr<cv::cuda::TemplateMatching> matcher = cv::cuda::createTemplateMatching(CV_8U, args.temp_method, cv::Size(0,0));
-      cv::Rect match_region(frame0_GPU.cols-50,frame0_GPU.rows/2,50,50);
-      cv::cuda::GpuMat im_template(frame0_GPU(match_region));
-      matcher -> match(frame1_GPU, im_template, min_max);
+      cv::Rect match_region(0, frame1_GPU.rows/2,50,50);
+      cv::cuda::GpuMat im_template(frame1_GPU(match_region));
+      matcher -> match(frame0_GPU, im_template, min_max);
       double minval, maxval;
       cv::Point minlocation, maxlocation;
       cv::cuda::minMaxLoc(min_max, &minval, &maxval, &minlocation, &maxlocation);
@@ -512,16 +306,17 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
       affine.at<float>(1,0) = 0;
       affine.at<float>(1,1) = 1;
       affine.at<float>(1,2) = matchlocation.y - frame0_GPU.rows/2;
-      cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
+      cv::cuda::warpAffine(frame1_GPU, new_frame1, affine, frame1_GPU.size(), cv::INTER_LINEAR);
 
     }
-  else if (features)
+  else if (features || (frame0.rows != frame1.rows) || (frame0.cols != frame1.cols))
     {
 
-      cv::cuda::GpuMat new_frame0;
-      find_alignment(frame0_GPU(rois.at(0)), frame1_GPU(rois.at(1)), affine, featureargs);
-      cv::cuda::warpAffine(frame0_GPU, new_frame0, affine, frame0_GPU.size(), cv::INTER_LINEAR);
-      frame0_GPU = new_frame0;
+      cv::cuda::GpuMat new_frame1;
+      find_alignment(frame1_GPU, frame0_GPU, affine, featureargs);
+      cv::cuda::warpAffine(frame1_GPU, new_frame1, affine, frame0_GPU.size(), cv::INTER_LINEAR);
+      frame1_GPU = new_frame1;
+      features = true;
     }
   if ( rois.size() == 2 )
     {
@@ -540,7 +335,7 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
     }
   if (features || use_template)
     {
-      frame0_GPU = old_frame0;
+      frame1_GPU = old_frame1;
     }
 }
 
@@ -548,12 +343,6 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 {
   cv::cuda::GpuMat flow_GPU;
   TVL1_solve(frame0, frame1, flow_GPU, args);
-  cv::cuda::GpuMat inv_x_GPU, inv_y_GPU;
-
-  if (features || use_template)
-    {
-      cv::cuda::buildWarpAffineMaps(affine, true, frame0.size(), inv_x_GPU, inv_y_GPU); //inverse
-    }
   
   std::string file_x = output_dir+"/"+out_name+"_x.tiff";
   std::string file_y = output_dir+"/"+out_name+"_y.tiff";
@@ -561,16 +350,14 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
   std::vector<cv::cuda::GpuMat> flow_xy_GPU;
   cv::cuda::split(flow_GPU,flow_xy_GPU);
   cv::Mat flow_x, flow_y;
-  flow_xy_GPU[0].download(flow_x);
-  flow_xy_GPU[1].download(flow_y);
   if (features || use_template)
     {
-      cv::Mat inv_x, inv_y;
-      inv_x_GPU.download(inv_x);
-      inv_y_GPU.download(inv_y);
       cv::Mat map_x, map_y;
-      map_x.create(inv_x.size(), CV_32FC1);
-      map_y.create(inv_y.size(), CV_32FC1);
+      cv::cuda::GpuMat map_x_GPU, map_y_GPU;
+      cv::cuda::GpuMat new_x_GPU, new_y_GPU;
+
+      map_x.create(flow_xy_GPU[0].size(), CV_32FC1);
+      map_y.create(flow_xy_GPU[0].size(), CV_32FC1);
       for(int j=0; j<inv_x.rows; j++)
 	{
 	  for ( int i=0; i < inv_x.cols; i++)
@@ -579,27 +366,24 @@ void remap_and_save(std::string output_dir, int i, cv::Mat frame, cv::Mat blur, 
 	      map_y.at<float>(j,i) = (float)j;
 	    }
 	}
-      flow_x += inv_x - map_x;
-      flow_y += inv_y - map_y;
-      cv::Mat frame0_CPU;
-      cv::cuda::GpuMat frame0_remap;
-      cv::cuda::remap(frame0, frame0_remap, inv_x_GPU, inv_y_GPU, cv::INTER_LINEAR);
-      frame0_remap.download(frame0_CPU);
-      frame0_CPU.convertTo(frame0_CPU,CV_32FC1);
-      
-      for(int j=0; j<frame0_CPU.rows; j++)
-	{
-	  for( int i=0; i < frame0_CPU.cols; i++)
-	    {
-	      if (frame0_CPU.at<float>(j,i) == (float)0)
-		{
-		  flow_x.at<float>(j,i) = (float)0;
-		  flow_y.at<float>(j,i) = (float)0;
-		}
-	    }
-	}
+      map_x_GPU.upload(map_x);
+      map_y_GPU.upload(map_y);
+      cv::cuda::add(flow_xy_GPU[0], map_x_GPU, flow_xy_GPU[0]);
+      cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[0]);
+      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP);
+      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP);
+      cv::cuda::subtract(new_x_GPU, map_x_GPU, new_x_GPU);
+      cv::cuda::subtract(new_y_GPU, map_y_GPU, new_y_GPU);
       
     }
+  //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
+  cv::cuda::GpuMat mask;
+  cv::gpu::bitwise_not(frame0, mask);
+  flow_xy_GPU[0].setTo(Scalar::all(0), mask);
+  flow_xy_GPU[1].setTo(Scalar::all(0), mask);
+  flow_xy_GPU[0].download(flow_x);
+  flow_xy_GPU[1].download(flow_y);
+
   imwrite(file_x, flow_x);
   imwrite(file_y, flow_y);
 }
