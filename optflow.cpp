@@ -81,12 +81,14 @@ int from_file(Json::Value& args)
   
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
-      std::cout<<i<<"\n";
+      std::cout<<0<<"\n";
       Json::Value im_data=images[i];
       frame0_name = im_data["image_0"].asString();
       frame1_name = im_data["image_1"].asString();
       scale = im_data.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
       im_data["scale"] = im_data.get("scale",scale).asDouble();
+      std::cout<<1<<"\n";
+
       //Check to see if one of these images is already in memory.
       //GPU upload is typically small since we use only a fraction.
       if ( (frame0_name == old_frame1) && (scale == old_scale) )
@@ -119,7 +121,7 @@ int from_file(Json::Value& args)
 	  //We have specific instructions
 	  get_rois(rois,images["rois"], std::min(frame0.rows, frame1.rows), std::min(frame0.cols, frame1.cols));
 	}
-      else if (args.isMember("rois"), std::min(frame0.rows, frame1.rows), std::min(frame0.cols, frame1.cols))
+      else if (args.isMember("rois"))
 	{
 	  //Use base values
 	  get_rois(rois,args["rois"], std::min(frame0.rows, frame1.rows), std::min(frame0.cols, frame1.cols));
@@ -133,7 +135,8 @@ int from_file(Json::Value& args)
 	  rois["default"][3] =  std::min(frame0.rows, frame1.rows);
 	}
       std::sprintf(buffer, "%0.2f", scale);
- 
+      std::cout<<2<<"\n";
+
       im_data["output"] = im_data.get("output", args["output_dir"].asString()+im_data["output_name"].asString()+"_"+buffer);
       solve_rois(frame0, frame1, rois, im_data, args);
     }
