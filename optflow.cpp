@@ -282,21 +282,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   cv::Mat affine(cv::Size(3,2), CV_32FC1);
   double offset_x, offset_y;
   bool features;
-  int output_type;
-  std::string output_flag;
-  output_flag = im_args.get("output_type",args.get("output_type","map").asString()).asString();
-  if (output_flag == "map")
-    {
-      output_type = 0;
-    }
-  else if (output_flag == "flow")
-    {
-      output_type = 1;
-    }
-  else if (output_flag == "matches")
-    {
-      output_type = 2;
-    }
+
   if ( im_args.isMember("features") && !im_args["features"].asBool() )
     {
       features = false;
@@ -364,6 +350,9 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
   cv::cuda::split(flow_GPU,flow_xy_GPU);
   cv::Mat flow_x, flow_y;
   cv::cuda::GpuMat warp_frame0;
+  std::string output_type;
+  output_type = im_args.get("output_type",args.get("output_type","map").asString()).asString();
+
   if (features)
     {
       cv::Mat map_x, map_y;
@@ -387,7 +376,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
       cv::cuda::warpAffine(flow_xy_GPU[1], new_y_GPU, affine, flow_xy_GPU[1].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
 
-      if (output_type == 1)
+      if (output_type == "flow")
 	{
 	  cv::cuda::subtract(new_x_GPU, map_x_GPU, flow_xy_GPU[0]);
 	  cv::cuda::subtract(new_y_GPU, map_y_GPU, flow_xy_GPU[1]);
@@ -397,6 +386,28 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 	  flow_xy_GPU[0] = new_x_GPU;
 	  flow_xy_GPU[1] = new_y_GPU;
 	}
+    }
+  else if (output_type == "map")
+    {
+      cv::Mat map_x, map_y;
+      cv::cuda::GpuMat map_x_GPU, map_y_GPU;
+      cv::cuda::GpuMat new_x_GPU, new_y_GPU;
+      
+      map_x.create(flow_xy_GPU[0].size(), CV_32FC1);
+      map_y.create(flow_xy_GPU[1].size(), CV_32FC1);
+      for(int j=0; j < map_x.rows; j++)
+	{
+	  for ( int i=0; i < map_x.cols; i++)
+	    {
+	      map_x.at<float>(j,i) = (float)i;
+	      map_y.at<float>(j,i) = (float)j;
+	    }
+	}
+      map_x_GPU.upload(map_x);
+      map_y_GPU.upload(map_y);
+      
+      cv::cuda::add(flow_xy_GPU[0], map_x_GPU, flow_xy_GPU[0]);
+      cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[1]);
     }
   //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
   cv::cuda::GpuMat mask;
@@ -408,7 +419,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
   flow_xy_GPU[1].download(flow_y);
 
 
-  if ( (output_type == 0) || (output_type == 1) )
+  if ( (output_type == "map") || (output_type == "flow") )
     {
       cv::imwrite(file_x, flow_x);
       cv::imwrite(file_y, flow_y);
