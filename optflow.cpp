@@ -81,6 +81,7 @@ int from_file(Json::Value& args)
   
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
+      std::cout<<i<<"\n";
       Json::Value im_data=images[i];
       frame0_name = im_data["image_0"].asString();
       frame1_name = im_data["image_1"].asString();
