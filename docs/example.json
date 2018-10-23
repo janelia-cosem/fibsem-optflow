@@ -1,4 +1,5 @@
 {
+    "debug": true,
     "style": 1,
     "images":[{
 	"image_0":"/data_nvme/images/test_images/Merlin-4238_18-06-27_002735_0-0-0-InLens.png",
