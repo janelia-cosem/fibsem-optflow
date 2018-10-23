@@ -4,7 +4,9 @@
     "images":[{
 	"image_0":"/data_nvme/images/test_images/Merlin-4238_18-06-27_002735_0-0-0-InLens.png",
 	"image_1":"/data_nvme/images/test_images/Merlin-4238_18-06-27_004103_0-0-0-InLens.png",
-	"output_name":"json_test"
+	"output_name":"json_test",
+	"hessianThreshold":200,
+	"ratio":0.9
     }],
     "scale": 0.5,
     "output_dir": "/data_nvme/images/test_images"
