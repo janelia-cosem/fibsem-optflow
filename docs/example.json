@@ -1,15 +1,19 @@
 {
     "debug": true,
     "style": 1,
+    "features":2,
     "images":[{
-	"image_0":"/data_nvme/images/test_images/Merlin-4238_18-06-27_002735_0-0-0-InLens.png",
-	"image_1":"/data_nvme/images/test_images/Merlin-4238_18-06-27_004103_0-0-0-InLens.png",
+	"image_0":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
+	"image_1":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225243_0-0-0-InLens.png",
 	"output_name":"json_test",
-	"hessianThreshold":200,
-	"ratio":0.9
+	"hessianThreshold":3200,
+	"homo":4,
+	"ratio":0.7,
+	"ransac":1,
+	"output_type":"flow"
     }],
-    "scale": 0.5,
-    "output_dir": "/data_nvme/images/test_images"
+    "scale": 1.0,
+    "output_dir": "/data_nvme/images/test_images/"
 }
     
     

@@ -47,11 +47,11 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
 {
 
   bool debug=args.get("debug",false).asBool();
-std::vector< cv::KeyPoint > keypoints_0, keypoints_1;
-cv::cuda::GpuMat descriptors_0_GPU, descriptors_1_GPU;
+  std::vector< cv::KeyPoint > keypoints_0, keypoints_1;
+ cv::cuda::GpuMat descriptors_0_GPU, descriptors_1_GPU;
   int norm;
-
-  if (args["features"].asInt()==ORB_TYPE)
+  int feature_type = im_args.get("features",args.get("features",SURF_TYPE).asInt()).asInt();
+  if (feature_type==ORB_TYPE)
     {
       Json::Value orb_args;
       orb_args = orb_defaults(im_args, args);
@@ -61,25 +61,28 @@ cv::cuda::GpuMat descriptors_0_GPU, descriptors_1_GPU;
       orb->detectAndCompute(frame1, cv::noArray(), keypoints_1, descriptors_1_GPU);
       norm = cv::NORM_HAMMING;
     }
-  else if (args["features"].asInt()==SURF_TYPE)
+  else if (feature_type==SURF_TYPE)
     {
       Json::Value surf_args;
       surf_args = surf_defaults(im_args, args);
       cv::cuda::GpuMat keypoints_0_GPU, keypoints_1_GPU;
-      int pad_cols, pad_rows;
+      int pad_cols_0, pad_rows_0, pad_cols_1, pad_rows_1;
       /*This thing requires things to be a multiple of 64 for some reason*/
-      pad_cols = (64 - frame0.cols % 64) % 64;
-      pad_rows = (64 - frame0.rows % 64) % 64;
+      pad_cols_0 = (64 - frame0.cols % 64) % 64;
+      pad_rows_0 = (64 - frame0.rows % 64) % 64;
+      pad_cols_1 = (64 - frame1.cols % 64) % 64;
+      pad_rows_1 = (64 - frame1.rows % 64) % 64;
+
       cv::cuda::GpuMat frame0_surf, frame1_surf;
-      cv::cuda::copyMakeBorder(frame0,frame0_surf,0,pad_rows,0,pad_cols,cv::BORDER_REFLECT_101);
-      cv::cuda::copyMakeBorder(frame1,frame1_surf,0,pad_rows,0,pad_cols,cv::BORDER_REFLECT_101);
+      cv::cuda::copyMakeBorder(frame0,frame0_surf,0,pad_rows_0,0,pad_cols_0,cv::BORDER_REFLECT_101);
+      cv::cuda::copyMakeBorder(frame1,frame1_surf,0,pad_rows_1,0,pad_cols_1,cv::BORDER_REFLECT_101);
       cv::cuda::SURF_CUDA surf;
-      surf.hessianThreshold = args["surf"]["hessianThreshold"].asInt();
-      surf.nOctaves = args["surf"]["nOctaves"].asInt();
-      surf.nOctaveLayers = args["surf"]["nOctaveLayers"].asInt();
-      surf.extended = args["surf"]["extended"].asBool();
-      surf.upright = args["surf"]["upright"].asBool();
-      surf.keypointsRatio = args["surf"]["keypointsRatio"].asFloat();
+      surf.hessianThreshold = surf_args["hessianThreshold"].asInt();
+      surf.nOctaves = surf_args["nOctaves"].asInt();
+      surf.nOctaveLayers = surf_args["nOctaveLayers"].asInt();
+      surf.extended = surf_args["extended"].asBool();
+      surf.upright = surf_args["upright"].asBool();
+      surf.keypointsRatio = surf_args["keypointsRatio"].asFloat();
       surf(frame0_surf, cv::cuda::GpuMat(), keypoints_0_GPU, descriptors_0_GPU);
       surf(frame1_surf, cv::cuda::GpuMat(), keypoints_1_GPU, descriptors_1_GPU);
       

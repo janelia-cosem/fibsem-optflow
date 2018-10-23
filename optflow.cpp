@@ -81,13 +81,11 @@ int from_file(Json::Value& args)
   
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
-      std::cout<<0<<"\n";
       Json::Value im_data=images[i];
       frame0_name = im_data["image_0"].asString();
       frame1_name = im_data["image_1"].asString();
       scale = im_data.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
       im_data["scale"] = im_data.get("scale",scale).asDouble();
-      std::cout<<1<<"\n";
 
       //Check to see if one of these images is already in memory.
       //GPU upload is typically small since we use only a fraction.
@@ -111,12 +109,12 @@ int from_file(Json::Value& args)
 	      if (scale != 1) cv::resize(frame1, frame1, cv::Size(), scale, scale);
 	    }
 	}
-      
+      old_scale = scale;
       old_frame0 = frame0_name;
       old_frame1 = frame1_name;
 
       Json::Value rois;
-      if (images.isMember("rois"))
+      if (im_data.isMember("rois"))
 	{
 	  //We have specific instructions
 	  get_rois(rois,images["rois"], std::min(frame0.rows, frame1.rows), std::min(frame0.cols, frame1.cols));
@@ -135,9 +133,8 @@ int from_file(Json::Value& args)
 	  rois["default"][3] =  std::min(frame0.rows, frame1.rows);
 	}
       std::sprintf(buffer, "%0.2f", scale);
-      std::cout<<2<<"\n";
 
-      im_data["output"] = im_data.get("output", args["output_dir"].asString()+im_data["output_name"].asString()+"_"+buffer);
+      im_data["output"] = im_data.get("output", args["output_dir"].asString()+"/"+im_data["output_name"].asString()+"_"+buffer);
       solve_rois(frame0, frame1, rois, im_data, args);
     }
   return 0;
@@ -268,10 +265,10 @@ void get_rois(Json::Value& rois, Json::Value& args, int rows, int cols)
 cv::Rect roi_from_array(Json::Value& roi_array)
 {
   cv::Rect roi;
-  roi.x = roi_array[0u].asFloat(); //0u is safer
-  roi.y = roi_array[1].asFloat();
-  roi.width = roi_array[2].asFloat();
-  roi.height = roi_array[3].asFloat();
+  roi.x = roi_array[0u].asInt(); //0u is safer
+  roi.y = roi_array[1].asInt();
+  roi.width = roi_array[2].asInt();
+  roi.height = roi_array[3].asInt();
   return roi;
 }
 
@@ -285,6 +282,21 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   cv::Mat affine(cv::Size(3,2), CV_32FC1);
   double offset_x, offset_y;
   bool features;
+  int output_type;
+  std::string output_flag;
+  output_flag = im_args.get("output_type",args.get("output_type","map").asString()).asString();
+  if (output_flag == "map")
+    {
+      output_type = 0;
+    }
+  else if (output_flag == "flow")
+    {
+      output_type = 1;
+    }
+  else if (output_flag == "matches")
+    {
+      output_type = 2;
+    }
   if ( im_args.isMember("features") && !im_args["features"].asBool() )
     {
       features = false;
@@ -318,13 +330,13 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	{
 	  if (features || (frame0.rows != frame1.rows) || (frame0.cols != frame1.cols) || roi_key=="default")
 	    {
-	      if ( ((frame0.rows != frame1.rows) || (frame0.cols != frame1.cols)) && roi_key != "custom" && features == false)
+	      if ( ((frame0.rows != frame1.rows) || (frame0.cols != frame1.cols)) || roi_key=="default" && roi_key != "custom" && features == false)
 		{
 		  std::cerr << "Rows or columns differ between frames no ROI selected, reverting to features even though it wasn't selected.\n";
 		}
 	      cv::cuda::GpuMat new_frame1;
 	      find_alignment(frame1_GPU, frame0_GPU, affine, im_args, args);
-	      cv::cuda::warpAffine(frame1_GPU, new_frame1, affine, frame0_GPU.size(), cv::INTER_LINEAR);
+	      cv::cuda::warpAffine(frame1_GPU, new_frame1, affine, frame0_GPU.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
 	      frame1_GPU = new_frame1;
 	      features = true;
 	    }
@@ -351,6 +363,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
   std::vector<cv::cuda::GpuMat> flow_xy_GPU;
   cv::cuda::split(flow_GPU,flow_xy_GPU);
   cv::Mat flow_x, flow_y;
+  cv::cuda::GpuMat warp_frame0;
   if (features)
     {
       cv::Mat map_x, map_y;
@@ -358,7 +371,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       cv::cuda::GpuMat new_x_GPU, new_y_GPU;
 
       map_x.create(flow_xy_GPU[0].size(), CV_32FC1);
-      map_y.create(flow_xy_GPU[0].size(), CV_32FC1);
+      map_y.create(flow_xy_GPU[1].size(), CV_32FC1);
       for(int j=0; j < map_x.rows; j++)
 	{
 	  for ( int i=0; i < map_x.cols; i++)
@@ -370,23 +383,36 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       map_x_GPU.upload(map_x);
       map_y_GPU.upload(map_y);
       cv::cuda::add(flow_xy_GPU[0], map_x_GPU, flow_xy_GPU[0]);
-      cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[0]);
-      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP);
-      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP);
-      cv::cuda::subtract(new_x_GPU, map_x_GPU, new_x_GPU);
-      cv::cuda::subtract(new_y_GPU, map_y_GPU, new_y_GPU);
-      
+      cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[1]);
+      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
+      cv::cuda::warpAffine(flow_xy_GPU[1], new_y_GPU, affine, flow_xy_GPU[1].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
+
+      if (output_type == 1)
+	{
+	  cv::cuda::subtract(new_x_GPU, map_x_GPU, flow_xy_GPU[0]);
+	  cv::cuda::subtract(new_y_GPU, map_y_GPU, flow_xy_GPU[1]);
+	}
+      else
+	{
+	  flow_xy_GPU[0] = new_x_GPU;
+	  flow_xy_GPU[1] = new_y_GPU;
+	}
     }
   //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
   cv::cuda::GpuMat mask;
-  cv::cuda::bitwise_not(frame0, mask);
+  cv::cuda::threshold(frame1, mask, 1.0, 1.0, cv::THRESH_BINARY_INV);
   flow_xy_GPU[0].setTo(cv::Scalar::all(0), mask);
   flow_xy_GPU[1].setTo(cv::Scalar::all(0), mask);
+
   flow_xy_GPU[0].download(flow_x);
   flow_xy_GPU[1].download(flow_y);
 
-  cv::imwrite(file_x, flow_x);
-  cv::imwrite(file_y, flow_y);
+
+  if ( (output_type == 0) || (output_type == 1) )
+    {
+      cv::imwrite(file_x, flow_x);
+      cv::imwrite(file_y, flow_y);
+    }
 }
 
 Json::Value generate_TV_args(const Json::Value& im_args,const Json::Value& args)
