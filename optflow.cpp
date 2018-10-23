@@ -316,7 +316,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	    {
 	      if ( ((frame0.rows != frame1.rows) || (frame0.cols != frame1.cols)) && roi_key != "custom" && features == false)
 		{
-		  std::cerr << "Rows or columns differ between frames, reverting to features even though it wasn't selected.\n";
+		  std::cerr << "Rows or columns differ between frames no ROI selected, reverting to features even though it wasn't selected.\n";
 		}
 	      cv::cuda::GpuMat new_frame1;
 	      find_alignment(frame1_GPU, frame0_GPU, affine, im_args, args);
@@ -390,14 +390,14 @@ Json::Value generate_TV_args(const Json::Value& im_args,const Json::Value& args)
   Json::Value TV_args;
   TV_args["tau"] = im_args.get("tau",args.get("tau",0.25).asDouble()).asDouble();
   TV_args["lambda"] = im_args.get("lambda",args.get("lambda",0.05).asDouble()).asDouble();
-  TV_args["theta"] = im_args.get("theta",args.get("",0.3).asDouble()).asDouble();
-  TV_args["nscales"] = im_args.get("nscales",args.get("",10).asInt()).asInt();
-  TV_args["warps"] = im_args.get("warps",args.get("",5).asInt()).asInt();
-  TV_args["epsilon"] = im_args.get("epsilon",args.get("",0.01).asDouble()).asDouble();
-  TV_args["iterations"] = im_args.get("iterations",args.get("",300).asInt()).asInt();
-  TV_args["scaleStep"] = im_args.get("scaleStep",args.get("",0.8).asDouble()).asDouble();
-  TV_args["gamma"] = im_args.get("gamma",args.get("",0.0).asDouble()).asDouble();
-  TV_args["useInitialFlow"] = im_args.get("useInitialFlow",args.get("",false).asBool()).asBool();
+  TV_args["theta"] = im_args.get("theta",args.get("theta",0.3).asDouble()).asDouble();
+  TV_args["nscales"] = im_args.get("nscales",args.get("nscales",10).asInt()).asInt();
+  TV_args["warps"] = im_args.get("warps",args.get("warps",5).asInt()).asInt();
+  TV_args["epsilon"] = im_args.get("epsilon",args.get("epsilon",0.01).asDouble()).asDouble();
+  TV_args["iterations"] = im_args.get("iterations",args.get("iterations",300).asInt()).asInt();
+  TV_args["scaleStep"] = im_args.get("scaleStep",args.get("scaleStep",0.8).asDouble()).asDouble();
+  TV_args["gamma"] = im_args.get("gamma",args.get("gamma",0.0).asDouble()).asDouble();
+  TV_args["useInitialFlow"] = im_args.get("useInitialFlow",args.get("useInitialFlow",false).asBool()).asBool();
   return TV_args;
 }
 
