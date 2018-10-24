@@ -24,10 +24,13 @@ cv::Rect roi_from_array(Json::Value& roi_array);
 
 void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value& im_args, Json::Value& args);
 
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, Json::Value& im_args, Json::Value& args, bool features);
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, Json::Value& im_args, Json::Value& args, bool features, std::vector < cv:: Rect > roi_vec);
 
 Json::Value generate_TV_args(const Json::Value& im_args, const Json::Value& args);
 
 void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::GpuMat& output, const Json::Value& args); 
 
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec);
+
+void upload_points(const Json::Value& im_args, const Json::Value& args);
 #endif

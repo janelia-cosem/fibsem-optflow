@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm> 
 
+#include <curl/curl.h>
 #include <jsoncpp/json/json.h>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/copy.hpp>
@@ -46,7 +47,7 @@ int main(int argc, const char* argv[])
       in.push(boost::iostreams::gzip_decompressor());
       in.push(file);
       boost::iostreams::copy(in, json_str);
-      reader.parse(file, args, false);
+      reader.parse(json_str, args, false);
     }
   else
     {
@@ -82,8 +83,8 @@ int from_file(Json::Value& args)
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
       Json::Value im_data=images[i];
-      frame0_name = im_data["image_0"].asString();
-      frame1_name = im_data["image_1"].asString();
+      frame0_name = im_data["p"].asString();
+      frame1_name = im_data["q"].asString();
       scale = im_data.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
       im_data["scale"] = im_data.get("scale",scale).asDouble();
 
@@ -282,6 +283,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   cv::Mat affine(cv::Size(3,2), CV_32FC1);
   double offset_x, offset_y;
   bool features;
+  std::vector < cv::Rect > roi_vec;
 
   if ( im_args.isMember("features") && !im_args["features"].asBool() )
     {
@@ -301,6 +303,14 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
     }
   for (auto const& roi_key: rois.getMemberNames())
     {
+      if ( (roi_key == "top") || (roi_key == "bottom") )
+	{
+	  im_args["output_suffix"] = "_"+roi_key;
+	}
+      else
+	{
+	  im_args["output_suffix"] = "";
+	}
       if (roi_key == "custom_diff")
 	{
 	  if (features)
@@ -310,7 +320,9 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	  cv::Rect roi_0, roi_1;
 	  roi_0 = roi_from_array(rois["custom_diff"]["0"]);
 	  roi_1 = roi_from_array(rois["custom_diff"]["1"]);
-	  solve_wrapper(frame0_GPU(roi_0), frame1_GPU(roi_1), affine, im_args, args, features);
+	  roi_vec.push_back(roi_0);
+	  roi_vec.push_back(roi_1);
+	  solve_wrapper(frame0_GPU(roi_0), frame1_GPU(roi_1), affine, im_args, args, features, roi_vec);
 	}
       else
 	{
@@ -328,29 +340,35 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	    }
 	  cv::Rect roi;
 	  roi = roi_from_array(rois[roi_key]);
-	  solve_wrapper(frame0_GPU(roi), frame1_GPU(roi), affine, im_args, args, features);
+	  roi_vec.push_back(roi);
+	  roi_vec.push_back(roi);
+	  solve_wrapper(frame0_GPU(roi), frame1_GPU(roi), affine, im_args, args, features, roi_vec);
 	}
 
+    }
+
+  if (im_args.get("output_type",args.get("output_type","map").asString()).asString() == "random_points")
+    {
+      upload_points(im_args, args);
     }
 
 }
 
 /*GpuMats are ROI subsets so can't be constant*/
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, Json::Value& im_args, Json::Value& args, bool features)
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, Json::Value& im_args, Json::Value& args, bool features, std::vector < cv::Rect > roi_vec)
 {
   cv::cuda::GpuMat flow_GPU;
   Json::Value TV_args;
   TV_args = generate_TV_args(im_args,args);
   TVL1_solve(frame0, frame1, flow_GPU, TV_args);
   
-  std::string file_x = im_args["output"].asString()+"_x.tiff";
-  std::string file_y = im_args["output"].asString()+"_y.tiff";
   
   std::vector<cv::cuda::GpuMat> flow_xy_GPU;
   cv::cuda::split(flow_GPU,flow_xy_GPU);
   cv::Mat flow_x, flow_y;
   cv::cuda::GpuMat warp_frame0;
   std::string output_type;
+  bool debug=args.get("debug",false).asBool();
   output_type = im_args.get("output_type",args.get("output_type","map").asString()).asString();
 
   if (features)
@@ -421,10 +439,19 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
   if ( (output_type == "map") || (output_type == "flow") )
     {
+      std::string file_x = im_args["output"].asString()+im_args["output_suffix"].asString()+"_x.tiff";
+      std::string file_y = im_args["output"].asString()+im_args["output_suffix"].asString()+"_y.tiff";
       cv::imwrite(file_x, flow_x);
       cv::imwrite(file_y, flow_y);
     }
+
+  if ( (output_type == "random_points" ))
+    {
+      random_points(flow_x, flow_y, im_args, args, roi_vec);
+    }
 }
+  
+
 
 Json::Value generate_TV_args(const Json::Value& im_args,const Json::Value& args)
 {
@@ -446,4 +473,99 @@ void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::Gp
 {
   cv::Ptr<cv::cuda::OpticalFlowDual_TVL1> solver = cv::cuda::OpticalFlowDual_TVL1::create(args["tau"].asDouble(), args["lambda"].asDouble(), args["theta"].asDouble(), args["nscales"].asInt(), args["warps"].asInt(), args["epsilon"].asDouble(), args["iterations"].asInt(), args["scaleStep"].asDouble(), args["gamma"].asDouble());
   solver -> calc(frame0, frame1, output);
+}
+
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec)
+{
+  Json::Value pm;
+  
+  Json::Value p,q;
+  bool debug=args.get("debug",false).asBool();
+  float scale = im_args.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
+  float inv_scale = 1./scale;
+  cv::RNG rng(cv::getTickCount());
+
+
+  if (debug)
+    {
+      cv::RNG rng(); //Start with same random each time, doubling up to over-ride stupid compilation errors
+    }
+  int count = 0;
+  cv::Point pos;
+  while (count < im_args.get("npoints",args.get("npoints",25).asInt()).asInt())
+    {
+      pos.x = rng.uniform(0,flow_x.cols);
+      pos.y = rng.uniform(0,flow_x.rows);
+      
+      if (flow_x.at<float>(pos.y,pos.x) != 0) //0s are masked out
+	{
+	  im_args["point_matches"]["w"].append(1); //Because of course
+	  
+	  p[0] = (pos.x + roi_vec.at(0).x) * inv_scale;
+	  p[1] = (pos.y + roi_vec.at(0).y) * inv_scale;
+	  
+	  q[0] = (pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale;
+	  q[1] = (pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale;
+	  im_args["point_matches"]["p"].append(p);
+	  im_args["point_matches"]["q"].append(q);
+	  count += 1;
+	}
+    }
+}
+
+
+void upload_points(const Json::Value& im_args, const Json::Value& args)
+{
+  bool debug=args.get("debug",false).asBool();
+
+  Json::StreamWriterBuilder builder;
+  builder["commentStyle"] = "None";
+  builder["indentation"] = "   ";
+  Json::Value payload;
+  Json::Value single_pair;
+  single_pair["pGroupId"] = im_args["pGroupId"];
+  single_pair["pId"] = im_args["pId"];
+  single_pair["qGroupId"] = im_args["qGroupId"];
+  single_pair["qId"] = im_args["qId"];
+  single_pair["matches"] = im_args["point_matches"];
+  payload[0] = single_pair;
+  std::string owner = args.get("owner","flyem").asString();
+  std::string matchCollection = args.get("matchCollection","forgetful_owner").asString();
+  std::string host = args.get("host", "10.40.3.162").asString();
+  std::string port = args.get("port", "8080").asString();
+  std::string hostname;
+  CURL *curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+  std::ofstream outputFileStream("/tmp/test.json");
+  std::string payload_str = Json::writeString(builder, payload);
+  writer -> write(payload, &outputFileStream);
+  outputFileStream.close();
+  std::cout << payload[0]["pId"].asString() << "\n";
+  curl = curl_easy_init();
+  if (curl) {
+    hostname = "http://"+host+":"+port+"/render-ws/v1/owner/"+owner+"/matchCollection/"+matchCollection+"/matches";
+    curl_easy_setopt(curl, CURLOPT_URL, hostname.c_str());
+    if (debug)
+      {
+	std::cout << hostname;
+      }
+
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json; Accept: application/json");
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_PUT, 1);
+    curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, payload_str.c_str());
+    std::cout << "Beginning upload.\n";
+    res = curl_easy_perform(curl);
+    if (res != CURLE_OK)
+      {
+	std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << "\n" <<"Hostname: " << hostname << "\n";
+      }
+    curl_easy_cleanup(curl);
+    }
+  std::cout <<"Uploaded\n";
 }
