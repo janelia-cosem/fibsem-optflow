@@ -539,7 +539,7 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
 
   curl_global_init(CURL_GLOBAL_ALL);
   std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-
+  std::string payload_str = Json::writeString(builder, payload);
   curl = curl_easy_init();
   if (curl) {
     hostname = "http://"+host+":"+port+"/render-ws/v1/owner/"+owner+"/matchCollection/"+matchCollection+"/matches";
