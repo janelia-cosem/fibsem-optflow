@@ -539,11 +539,7 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
 
   curl_global_init(CURL_GLOBAL_ALL);
   std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-  std::ofstream outputFileStream("/tmp/test.json");
-  std::string payload_str = Json::writeString(builder, payload);
-  writer -> write(payload, &outputFileStream);
-  outputFileStream.close();
-  std::cout << payload[0]["pId"].asString() << "\n";
+
   curl = curl_easy_init();
   if (curl) {
     hostname = "http://"+host+":"+port+"/render-ws/v1/owner/"+owner+"/matchCollection/"+matchCollection+"/matches";
@@ -558,8 +554,8 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
     headers = curl_slist_append(headers, "Accept: application/json");
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_PUT, 1);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
+    curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, payload_str.c_str());
     std::cout << "Beginning upload.\n";
     res = curl_easy_perform(curl);
     if (res != CURLE_OK)
@@ -568,5 +564,4 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
       }
     curl_easy_cleanup(curl);
     }
-  std::cout <<"Uploaded\n";
 }
