@@ -554,11 +554,12 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
       }
 
     struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json; Accept: application/json");
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, "Accept: application/json");
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_PUT, 1);
-    curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, payload_str.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload_str.c_str());
     std::cout << "Beginning upload.\n";
     res = curl_easy_perform(curl);
     if (res != CURLE_OK)
