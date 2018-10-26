@@ -10,7 +10,7 @@ cuda
 
 ## Basic build
 ```
-g++ -ggdb optflow.cpp features.cpp -o optflow `pkg-config --cflags --libs opencv` -lgsl -lblas -lpng -ljsoncpp -lboost_iostreams -std=c++11
+g++ -ggdb src/*.cpp -o optflow `pkg-config --cflags --libs opencv` -lgsl -lblas -lpng -ljsoncpp -lboost_iostreams -std=c++11
 ```
 ## Hints
 
