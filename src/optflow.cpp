@@ -556,7 +556,6 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, payload_str.c_str());
-    std::cout << "Beginning upload.\n";
     res = curl_easy_perform(curl);
     if (res != CURLE_OK)
       {
