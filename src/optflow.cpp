@@ -283,7 +283,6 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   cv::Mat affine(cv::Size(3,2), CV_32FC1);
   double offset_x, offset_y;
   bool features;
-  std::vector < cv::Rect > roi_vec;
 
   if ( im_args.isMember("features") && !im_args["features"].asBool() )
     {
@@ -303,6 +302,8 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
     }
   for (auto const& roi_key: rois.getMemberNames())
     {
+      std::vector < cv::Rect > roi_vec;
+
       if ( (roi_key == "top") || (roi_key == "bottom") )
 	{
 	  im_args["output_suffix"] = "_"+roi_key;
@@ -483,8 +484,7 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
   float scale = im_args.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
   float inv_scale = 1./scale;
   cv::RNG rng(cv::getTickCount());
-
-
+  
   if (debug)
     {
       cv::RNG rng(); //Start with same random each time, doubling up to over-ride stupid compilation errors
@@ -494,34 +494,35 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
   while (count < im_args.get("npoints",args.get("npoints",25).asInt()).asInt())
     {
       cv::Point pos;
+
       pos.x = rng.uniform(0,flow_x.cols);
       pos.y = rng.uniform(0,flow_x.rows);
-      
       if (flow_x.at<float>(pos.y,pos.x) != 0) //0s are masked out
 	{
 	  im_args["point_matches"]["w"].append(1); //Because of course
-	  Json::Value p,q;
 	  if (features)
 	    {
-	      p[0] = pos.x * inv_scale;
-	      p[1] = pos.y * inv_scale;
-	      q[0] = flow_x.at<float>(pos.y, pos.x) * inv_scale;
-	      q[1] = flow_y.at<float>(pos.y, pos.x) * inv_scale;
+	      im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	      im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	      
+	      im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
+	      im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
 	    }
 	  else
 	    {
-	      p[0] = (pos.x + roi_vec.at(0).x) * inv_scale;
-	      p[1] = (pos.y + roi_vec.at(0).y) * inv_scale;
+	      im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	      im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
 
-	      q[0] = (pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale;
-	      q[1] = (pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale;
+	      im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
+	      im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
 
 	    }
-	  im_args["point_matches"]["p"].append(p);
-	  im_args["point_matches"]["q"].append(q);
 	  count += 1;
 	}
+      
     }
+  
+	  
 }
 
 
