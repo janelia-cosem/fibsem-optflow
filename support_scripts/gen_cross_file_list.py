@@ -30,14 +30,15 @@ def gen_file_list(cross, stack, base_path, n, match, ppf, logdir, render_connect
     for count, sub_pairs in enumerate(sub_pair_list):
         optflow["images"] = []
         for pair in sub_pairs:
-            if imageurls[pair["p"]["id"]] not in N_dict:
-                with open(logpath(logdir, imageurls[pair["p"]["id"]]), "r") as f:
-                    N_dict[imageurls[pair["p"]["id"]]] = float(
-                        next(f).split(" ")[0])
-            if imageurls[pair["q"]["id"]] not in N_dict:
-                with open(logpath(logdir, imageurls[pair["q"]["id"]]), "r") as f:
-                    N_dict[imageurls[pair["q"]["id"]]] = float(
-                        next(f).split(" ")[0])
+            if logdir is not None:
+                if imageurls[pair["p"]["id"]] not in N_dict:
+                    with open(logpath(logdir, imageurls[pair["p"]["id"]]), "r") as f:
+                        N_dict[imageurls[pair["p"]["id"]]] = float(
+                            next(f).split(" ")[0])
+                if imageurls[pair["q"]["id"]] not in N_dict:
+                    with open(logpath(logdir, imageurls[pair["q"]["id"]]), "r") as f:
+                        N_dict[imageurls[pair["q"]["id"]]] = float(
+                            next(f).split(" ")[0])
             im_data = {}
             im_data["p"] = imageurls[pair["p"]["id"]]
             im_data["q"] = imageurls[pair["q"]["id"]]
@@ -45,22 +46,23 @@ def gen_file_list(cross, stack, base_path, n, match, ppf, logdir, render_connect
             im_data["qId"] = pair["q"]["id"]
             im_data["pGroupId"] = pair["p"]["groupId"]
             im_data["qGroupId"] = pair["q"]["groupId"]
-            col_p = imageurls[pair["p"]["id"]].split("-")[-2]
-            col_q = imageurls[pair["p"]["id"]].split("-")[-2]
-            if "pGroupId" != "1.0" and "qGroupId" != "1.0":
-                if (N_dict[imageurls[pair["p"]["id"]]] - col_p == 1) or (N_dict[imageurls[pair["q"]["id"]]] - col_q == 1):
-                    im_data["features"] = kwargs.get("features", 2)
+            col_p = int(imageurls[pair["p"]["id"]].split("-")[-2])
+            col_q = int(imageurls[pair["p"]["id"]].split("-")[-2])
+            if logdir is not None:
+                if "pGroupId" != "1.0" and "qGroupId" != "1.0":
+                    if (N_dict[imageurls[pair["p"]["id"]]] - col_p == 1) or (N_dict[imageurls[pair["q"]["id"]]] - col_q == 1):
+                        im_data["features"] = kwargs.get("features", 2)
             optflow["images"].append(im_data)
 
         with gzip.GzipFile(base_path+"_%d.json.gz" % (count), "w") as fout:
             fout.write(json.dumps(optflow).encode('utf-8'))
 
 
-def logpath(logdir, imageurl):
+def logpath(log_dir, imageurl):
     image_name = imageurl.split("/")[-1]
     image_name = "-".join(image_name.split("-")[:-1])  # Strip -InLens
     log_name = image_name+".log"
-    lpath = log_dir + log_name
+    lpath = log_dir + "/" + log_name
     return lpath
 
 
@@ -117,6 +119,7 @@ if __name__ == "__main__":
     parser.add_argument("--memGB", default=os.environ.get("RENDER_CLIENT_HEAP"),
                         type=str)
     parser.add_argument("--logdir", type=str)
+
     args = parser.parse_args()
 
     render_connect_params = {
