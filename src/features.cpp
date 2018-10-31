@@ -125,13 +125,26 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
     }
   
   cv::Mat homo;
-
-  homo = cv::findHomography( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
-  if (debug)
+  if (good.size() > 3)
     {
-      std::cout << homo.at<double>(0,0) << ' ' << homo.at<double>(0,1) << ' ' << homo.at<double>(0,2) << "\n" << homo.at<double>(1,0) << ' ' << homo.at<double>(1,1) << ' ' << homo.at<double>(1,2) << "\n" << homo.at<double>(2,0) << ' ' << homo.at<double>(2,1) << ' ' << homo.at<double>(2,2) << "\n";
-    }
-  homo(cv::Range(0,2),cv::Range(0,3)).copyTo(affine);
+      homo = cv::findHomography( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
+    
+      if (debug)
+	{
+	  std::cout << homo.at<double>(0,0) << ' ' << homo.at<double>(0,1) << ' ' << homo.at<double>(0,2) << "\n" << homo.at<double>(1,0) << ' ' << homo.at<double>(1,1) << ' ' << homo.at<double>(1,2) << "\n" << homo.at<double>(2,0) << ' ' << homo.at<double>(2,1) << ' ' << homo.at<double>(2,2) << "\n";
+	}
+      homo(cv::Range(0,2),cv::Range(0,3)).copyTo(affine);
 
+    }
+  else
+    {
+      affine.at<float>(0,0) = 1.;
+      affine.at<float>(0,1) = 0.;
+      affine.at<float>(1,0) = 0.;
+      affine.at<float>(1,1) = 1.;
+      affine.at<float>(0,2) = 0.;
+      affine.at<float>(1,2) = 0.;
+      std::cout << "Not enough matches. Using no transformation\n";
+    }
 }
   
