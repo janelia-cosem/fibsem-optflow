@@ -7,21 +7,21 @@
     "ransac":5,
     "hessianThreshold":1600,
     "images":[{
-	"image_0":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
-	"image_1":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225243_0-0-0-InLens.png",
+	"p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
+	"q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225243_0-0-0-InLens.png",
 	"output_name":"json_test",
 	"hessianThreshold":1600,
 	"output_type":"map"
     },
 	      {
-		  "image_0":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
-		  "image_1":"/groups/scicompsoft/home/nicholsm/flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225316_0-0-0-InLens.png",
+		  "p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
+		  "q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225316_0-0-0-InLens.png",
 		  "output_name":"json_test2"
 		  "hessianThreshold":1600,
 		  "output_type":"map"
 	      }],
     "scale": 0.5,
-    "output_dir": "/data_nvme/images/test_images/"
+    "output_dir": "flyem-alignment/"
 }
     
     
