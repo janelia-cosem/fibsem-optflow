@@ -430,13 +430,14 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
     }
   //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
   cv::cuda::GpuMat mask;
-  cv::cuda::threshold(frame1, mask, 1.0, 1.0, cv::THRESH_BINARY_INV);
+  cv::cuda::GpuMat inv_mask;
+  cv::Mat cpu_mask;
+  cv::cuda::threshold(frame1, mask, 0.0, 1.0, cv::THRESH_BINARY_INV);
   flow_xy_GPU[0].setTo(cv::Scalar::all(0), mask);
   flow_xy_GPU[1].setTo(cv::Scalar::all(0), mask);
 
   flow_xy_GPU[0].download(flow_x);
   flow_xy_GPU[1].download(flow_y);
-
 
   if ( (output_type == "map") || (output_type == "flow") )
     {
@@ -448,7 +449,9 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
   if ( (output_type == "random_points" ))
     {
-      random_points(flow_x, flow_y, im_args, args, roi_vec, features);
+      cv::cuda::bitwise_not(mask,inv_mask);
+      inv_mask.download(cpu_mask);
+      random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features);
     }
 }
   
@@ -476,7 +479,7 @@ void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::Gp
   solver -> calc(frame0, frame1, output);
 }
 
-void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, bool features)
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
 {
   Json::Value pm;
   
@@ -491,12 +494,12 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
     }
   int count = 0;
 
-  while (count < im_args.get("npoints",args.get("npoints",25).asInt()).asInt())
+  std::vector<cv::Point> locations;
+  cv::findNonZero(mask,locations);
+  while ((count < im_args.get("npoints",args.get("npoints",25).asInt()).asInt()) && (count < locations.size()))
     {
       cv::Point pos;
-
-      pos.x = rng.uniform(0,flow_x.cols);
-      pos.y = rng.uniform(0,flow_x.rows);
+      pos = locations[rng.uniform(0,locations.size())];
       if (flow_x.at<float>(pos.y,pos.x) != 0) //0s are masked out
 	{
 	  im_args["point_matches"]["w"].append(1); //Because of course
