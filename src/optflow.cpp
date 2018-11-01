@@ -3,7 +3,8 @@
 #include <string>
 #include <deque>
 #include <vector>
-#include <algorithm> 
+#include <algorithm>
+#include <ctime>
 
 #include <curl/curl.h>
 #include <jsoncpp/json/json.h>
@@ -79,7 +80,7 @@ int from_file(Json::Value& args)
   float scale, old_scale;
   char buffer[10]; //Even 10 is overkill
   Json::Value images=args["images"];
-  
+  bool debug=args.get("debug",false).asBool();
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
       Json::Value im_data=images[i];
@@ -87,7 +88,7 @@ int from_file(Json::Value& args)
       frame1_name = im_data["q"].asString();
       scale = im_data.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
       im_data["scale"] = im_data.get("scale",scale).asDouble();
-
+      std::cout << frame0_name << " " << frame1_name <<"\n";
       //Check to see if one of these images is already in memory.
       //GPU upload is typically small since we use only a fraction.
       if ( (frame0_name == old_frame1) && (scale == old_scale) )
@@ -432,7 +433,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
   cv::cuda::GpuMat mask;
   cv::cuda::GpuMat inv_mask;
   cv::Mat cpu_mask;
-  cv::cuda::threshold(frame1, mask, 0.0, 1.0, cv::THRESH_BINARY_INV);
+  cv::cuda::threshold(frame1, mask, 1.0, 1.0, cv::THRESH_BINARY_INV);
   flow_xy_GPU[0].setTo(cv::Scalar::all(0), mask);
   flow_xy_GPU[1].setTo(cv::Scalar::all(0), mask);
 
@@ -449,7 +450,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
   if ( (output_type == "random_points" ))
     {
-      cv::cuda::bitwise_not(mask,inv_mask);
+      cv::cuda::threshold(frame1, inv_mask, 1.0, 1.0, cv::THRESH_BINARY);
       inv_mask.download(cpu_mask);
       random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features);
     }
@@ -486,43 +487,37 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
   bool debug=args.get("debug",false).asBool();
   float scale = im_args.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
   float inv_scale = 1./scale;
-  cv::RNG rng(cv::getTickCount());
-  
-  if (debug)
-    {
-      cv::RNG rng(); //Start with same random each time, doubling up to over-ride stupid compilation errors
-    }
-  int count = 0;
+
 
   std::vector<cv::Point> locations;
   cv::findNonZero(mask,locations);
-  while ((count < im_args.get("npoints",args.get("npoints",25).asInt()).asInt()) && (count < locations.size()))
+  if (!debug)
+    {
+      std::srand(std::time(0));
+    }
+  std::random_shuffle ( locations.begin(), locations.end() );
+  for (int i = 0; (i <  im_args.get("npoints",args.get("npoints",25).asInt()).asInt()) && ( i < locations.size()); i++)
     {
       cv::Point pos;
-      pos = locations[rng.uniform(0,locations.size())];
-      if (flow_x.at<float>(pos.y,pos.x) != 0) //0s are masked out
+      pos = locations[i];
+      im_args["point_matches"]["w"].append(1); //Because of course
+      if (features)
 	{
-	  im_args["point_matches"]["w"].append(1); //Because of course
-	  if (features)
-	    {
-	      im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	      im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
-	      
-	      im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
-	      im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
-	    }
-	  else
-	    {
-	      im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	      im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
-
-	      im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
-	      im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
-
-	    }
-	  count += 1;
+	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  
+	  im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
+	  im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
 	}
-      
+      else
+	{
+	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  
+	  im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
+	  im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
+	  
+	}
     }
   
 	  
