@@ -111,7 +111,9 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
   	  good.push_back(matches[i][0]);
   	}
     }
-  std::sort(good.begin(), good.end()); 
+
+  std::sort(good.begin(), good.end());
+
   if (debug)
     {
       std::cout << "Number of features: " << matches.size() << "\n";
@@ -123,16 +125,16 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
       points_0.push_back( keypoints_0[ good[i].queryIdx ].pt );
       points_1.push_back( keypoints_1[ good[i].trainIdx ].pt );
     }
-  
+
   cv::Mat homo;
   if (good.size() > 10)
     {
 
       homo = cv::findHomography( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
 
-      if ( (std::abs(1-homo.at<double>(0,0)) > 0.05) || (std::abs(1-homo.at<double>(1,0)) > 0.05))
+      if ( (homo.rows == 0) || (std::abs(1-homo.at<double>(0,0)) > 0.05) || (std::abs(1-homo.at<double>(1,0)) > 0.05))
 	{
-	  std::cout << "More than five percent variance in zoom, this is probably an error, ignoring the transformation.\n";
+	  std::cout << "More than five percent variance in zoom or no homography found, this is probably an error, ignoring the transformation.\n";
 	  affine.at<float>(0,0) = 1.;
 	  affine.at<float>(0,1) = 0.;
 	  affine.at<float>(1,0) = 0.;

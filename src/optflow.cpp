@@ -369,7 +369,10 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 
     }
 
-
+  if (im_args.get("output_type",args.get("output_type","map").asString()).asString() == "random_points")
+    {
+      move_pm(im_args, args);
+    }
 
 }
 
@@ -497,7 +500,7 @@ void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::Gp
   solver -> calc(frame0, frame1, output);
 }
 
-void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
 {
   Json::Value pm;
   
@@ -517,22 +520,22 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, Json:
     {
       cv::Point pos;
       pos = locations[i];
-      args["point_matches"]["w"].append(1); //Because of course
+      im_args["point_matches"]["w"].append(1); //Because of course
       if (features)
 	{
-	  args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
 	  
-	  args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
-	  args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
+	  im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
+	  im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
 	}
       else
 	{
-	  args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
 	  
-	  args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
-	  args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
+	  im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
+	  im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
 	  
 	}
     }
@@ -540,6 +543,26 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, Json:
 	  
 }
 
+void move_pm(Json::Value& im_args, Json::Value& args)
+{
+  Json::Value single_pair;
+
+  single_pair["pGroupId"] = im_args["pGroupId"];
+  single_pair["pId"] = im_args["pId"];
+  single_pair["qGroupId"] = im_args["qGroupId"];
+  single_pair["qId"] = im_args["qId"];
+  single_pair["matches"] = im_args["point_matches"];
+
+  if (args.isMember("point_matches"))
+    {
+      args["point_matches"].append(single_pair);
+    }
+  else
+    {
+      args["point_matches"][0] = single_pair;
+    }
+  im_args["point_matches"].clear();
+}
 
 void upload_points(const Json::Value& im_args, const Json::Value& args)
 {
@@ -548,14 +571,7 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
   Json::StreamWriterBuilder builder;
   builder["commentStyle"] = "None";
   builder["indentation"] = "   ";
-  Json::Value payload;
-  Json::Value single_pair;
-  single_pair["pGroupId"] = args["pGroupId"];
-  single_pair["pId"] = args["pId"];
-  single_pair["qGroupId"] = args["qGroupId"];
-  single_pair["qId"] = args["qId"];
-  single_pair["matches"] = args["point_matches"];
-  payload[0] = single_pair;
+
   std::string owner = args.get("owner","flyem").asString();
   std::string matchCollection = args.get("matchCollection","forgetful_owner").asString();
   std::string host = args.get("host", "10.40.3.162").asString();
@@ -566,7 +582,7 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
 
   curl_global_init(CURL_GLOBAL_ALL);
   std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-  std::string payload_str = Json::writeString(builder, payload);
+  std::string payload_str = Json::writeString(builder, args["point_matches"]);
   curl = curl_easy_init();
   if (curl) {
     hostname = "http://"+host+":"+port+"/render-ws/v1/owner/"+owner+"/matchCollection/"+matchCollection+"/matches";
