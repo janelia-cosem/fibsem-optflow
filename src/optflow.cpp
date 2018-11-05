@@ -81,9 +81,12 @@ int from_file(Json::Value& args)
   char buffer[10]; //Even 10 is overkill
   Json::Value images=args["images"];
   bool debug=args.get("debug",false).asBool();
+  int last_upload = 0;
+  bool any_upload_since = false;
+  Json::Value im_data;
   for (Json::Value::ArrayIndex i=0; i != images.size(); i++)
     {
-      Json::Value im_data=images[i];
+      im_data=images[i];
       frame0_name = im_data["p"].asString();
       frame1_name = im_data["q"].asString();
       scale = im_data.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
@@ -114,7 +117,7 @@ int from_file(Json::Value& args)
       old_scale = scale;
       old_frame0 = frame0_name;
       old_frame1 = frame1_name;
-
+    
       Json::Value rois;
       if (im_data.isMember("rois"))
 	{
@@ -135,10 +138,27 @@ int from_file(Json::Value& args)
 	  rois["default"][3] =  std::min(frame0.rows, frame1.rows);
 	}
       std::sprintf(buffer, "%0.2f", scale);
-
+      
       im_data["output"] = im_data.get("output", args["output_dir"].asString()+"/"+im_data["output_name"].asString()+"_"+buffer);
       solve_rois(frame0, frame1, rois, im_data, args);
+      
+      if (im_data.get("output_type",args.get("output_type","map").asString()).asString() == "random_points")
+	{
+	  any_upload_since = true;
+	  if (i > last_upload + args.get("batch_size",100).asInt())
+	    {
+	      upload_points(im_data, args);
+	      args["point_matches"].clear();
+	      last_upload = i;
+	      any_upload_since = false;
+	    }
+	} 
     }
+  if (any_upload_since)
+    {
+      upload_points(im_data, args);
+    }
+	
   return 0;
 }
 
@@ -349,10 +369,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 
     }
 
-  if (im_args.get("output_type",args.get("output_type","map").asString()).asString() == "random_points")
-    {
-      upload_points(im_args, args);
-    }
+
 
 }
 
@@ -480,7 +497,7 @@ void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::Gp
   solver -> calc(frame0, frame1, output);
 }
 
-void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
 {
   Json::Value pm;
   
@@ -500,22 +517,22 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
     {
       cv::Point pos;
       pos = locations[i];
-      im_args["point_matches"]["w"].append(1); //Because of course
+      args["point_matches"]["w"].append(1); //Because of course
       if (features)
 	{
-	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
 	  
-	  im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
-	  im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
+	  args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
+	  args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
 	}
       else
 	{
-	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
+	  args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
 	  
-	  im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
-	  im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
+	  args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
+	  args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
 	  
 	}
     }
@@ -533,11 +550,11 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
   builder["indentation"] = "   ";
   Json::Value payload;
   Json::Value single_pair;
-  single_pair["pGroupId"] = im_args["pGroupId"];
-  single_pair["pId"] = im_args["pId"];
-  single_pair["qGroupId"] = im_args["qGroupId"];
-  single_pair["qId"] = im_args["qId"];
-  single_pair["matches"] = im_args["point_matches"];
+  single_pair["pGroupId"] = args["pGroupId"];
+  single_pair["pId"] = args["pId"];
+  single_pair["qGroupId"] = args["qGroupId"];
+  single_pair["qId"] = args["qId"];
+  single_pair["matches"] = args["point_matches"];
   payload[0] = single_pair;
   std::string owner = args.get("owner","flyem").asString();
   std::string matchCollection = args.get("matchCollection","forgetful_owner").asString();
