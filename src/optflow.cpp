@@ -413,8 +413,8 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       map_y_GPU.upload(map_y);
       cv::cuda::add(flow_xy_GPU[0], map_x_GPU, flow_xy_GPU[0]);
       cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[1]);
-      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
-      cv::cuda::warpAffine(flow_xy_GPU[1], new_y_GPU, affine, flow_xy_GPU[1].size(), cv::INTER_LINEAR+cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
+      cv::cuda::warpAffine(flow_xy_GPU[0], new_x_GPU, affine, flow_xy_GPU[0].size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
+      cv::cuda::warpAffine(flow_xy_GPU[1], new_y_GPU, affine, flow_xy_GPU[1].size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
 
       if (output_type == "flow")
 	{
@@ -451,8 +451,8 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
     }
   //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
   cv::cuda::GpuMat mask;
-  cv::cuda::GpuMat inv_mask;
-  cv::Mat cpu_mask;
+  cv::cuda::GpuMat inv_mask0, inv_mask1;
+  cv::Mat cpu_mask0, cpu_mask1, cpu_mask;
   cv::cuda::threshold(frame1, mask, 1.0, 1.0, cv::THRESH_BINARY_INV);
   flow_xy_GPU[0].setTo(cv::Scalar::all(0), mask);
   flow_xy_GPU[1].setTo(cv::Scalar::all(0), mask);
@@ -470,8 +470,12 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
   if ( (output_type == "random_points" ))
     {
-      cv::cuda::threshold(frame1, inv_mask, 1.0, 1.0, cv::THRESH_BINARY);
-      inv_mask.download(cpu_mask);
+      cv::cuda::threshold(frame1, inv_mask1, 1.0, 1.0, cv::THRESH_BINARY);
+      cv::cuda::threshold(frame0, inv_mask0, 1.0, 1.0, cv::THRESH_BINARY);
+
+      inv_mask0.download(cpu_mask0);
+      inv_mask1.download(cpu_mask1);
+      cv::multiply(cpu_mask0,cpu_mask1,cpu_mask);
       random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features);
     }
 }
@@ -508,7 +512,6 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
   float scale = im_args.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
   float inv_scale = 1./scale;
 
-
   std::vector<cv::Point> locations;
   cv::findNonZero(mask,locations);
   if (!debug)
@@ -538,6 +541,16 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
 	  im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
 	  
 	}
+    }
+  if (locations.size() == 0)
+    {
+      //Create a dummy point to ensure fields are full
+      im_args["point_matches"]["p"][0].append(-1);
+      im_args["point_matches"]["p"][1].append(-1);
+      im_args["point_matches"]["q"][0].append(-1);
+      im_args["point_matches"]["q"][1].append(-1);
+      im_args["point_matches"]["w"].append(0);
+
     }
   
 	  
@@ -583,6 +596,10 @@ void upload_points(const Json::Value& im_args, const Json::Value& args)
   curl_global_init(CURL_GLOBAL_ALL);
   std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
   std::string payload_str = Json::writeString(builder, args["point_matches"]);
+  if (debug)
+    {
+      std::cout << payload_str <<"\n";
+    }
   curl = curl_easy_init();
   if (curl) {
     hostname = "http://"+host+":"+port+"/render-ws/v1/owner/"+owner+"/matchCollection/"+matchCollection+"/matches";

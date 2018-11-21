@@ -40,8 +40,10 @@ def gen_file_list(cross, stack, base_path, n, match, ppf, logdir, render_connect
                         N_dict[imageurls[pair["q"]["id"]]] = float(
                             next(f).split(" ")[0])
             if "sub_list" in kwargs:
-                if (int(pair["p"]["pGroupId"]) not in kwargs[sub_list]) and (int(pair["q"]["qGroupId"]) not in kwargs[sub_list]):
+                if (int(float(pair["p"]["groupId"])) not in kwargs["sub_list"]) and (int(float(pair["q"]["groupId"])) not in kwargs["sub_list"]):
                     continue
+                print(pair["p"])
+
             im_data = {}
             im_data["p"] = imageurls[pair["p"]["id"]]
             im_data["q"] = imageurls[pair["q"]["id"]]
@@ -49,6 +51,7 @@ def gen_file_list(cross, stack, base_path, n, match, ppf, logdir, render_connect
             im_data["qId"] = pair["q"]["id"]
             im_data["pGroupId"] = pair["p"]["groupId"]
             im_data["qGroupId"] = pair["q"]["groupId"]
+            im_data["output_name"] = pair["p"]["id"] + "_" + pair["q"]["id"]
             col_p = int(imageurls[pair["p"]["id"]].split("-")[-2])
             col_q = int(imageurls[pair["p"]["id"]].split("-")[-2])
             if logdir is not None:

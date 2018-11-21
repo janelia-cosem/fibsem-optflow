@@ -131,9 +131,9 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
     {
 
       homo = cv::findHomography( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
-      if ( (homo.rows == 0) || (std::abs(1-homo.at<double>(0,0)) > 0.05) || (std::abs(1-homo.at<double>(1,1)) > 0.05))
+      if ( (homo.rows == 0) || (std::abs(1-homo.at<double>(0,0)) > 0.20) || (std::abs(1-homo.at<double>(1,1)) > 0.20))
 	{
-	  std::cout << "More than five percent variance in zoom or no homography found, this is probably an error, ignoring the transformation.\n";
+	  std::cout << "More than twenty percent variance in zoom or no homography found, this is probably an error, ignoring the transformation.\n";
 	  if (debug)
 	    {
 	      std::cout << homo.at<double>(0,0) << ' ' << homo.at<double>(0,1) << ' ' << homo.at<double>(0,2) << "\n" << homo.at<double>(1,0) << ' ' << homo.at<double>(1,1) << ' ' << homo.at<double>(1,2) << "\n" << homo.at<double>(2,0) << ' ' << homo.at<double>(2,1) << ' ' << homo.at<double>(2,2) << "\n";
