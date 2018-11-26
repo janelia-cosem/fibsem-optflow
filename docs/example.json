@@ -1,27 +1,96 @@
 {
+    /* "debug": bool, optional
+
+       Prints a number of output messages, regardless of selection still produces the main output.
+    */
     "debug": true,
-    "style": 1,
-    "features":2,
-    "homo":4,
-    "ratio":0.7,
-    "ransac":5,
-    "hessianThreshold":1600,
-    "images":[{
-	"p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
-	"q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225243_0-0-0-InLens.png",
-	"output_name":"json_test",
-	"hessianThreshold":1600,
-	"output_type":"map"
-    },
-	      {
-		  "p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
-		  "q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225316_0-0-0-InLens.png",
-		  "output_name":"json_test2"
-		  "hessianThreshold":1600,
-		  "output_type":"map"
-	      }],
-    "scale": 0.5,
-    "output_dir": "flyem-alignment/"
-}
     
+
+    /* "style": int,
+       
+       Should be set to 1. Style is used for future implementation of an average flow based
+       iterative alignment, which doesn't have JSON-support yet, but was in earlier commits.
+    */
+    "style": 1,
+
+    
+    /* "features": int, optional
+
+       An integer based flag.
+       1 will use ORB based features (free)
+       2 will use SURF based features (patented, but allowed for non-commercial uses
+
+    */
+    "features":2,
+
+    /* "homo": int, optional
+
+       opencv method used to compute the homography, 0, 4 or 8.
+       0 uses all points, 4 RANSAC and 8 Least-median
+    */ 
+    "homo":4,
+
+    /* "ratio": float, optional, default 0.8
+
+       Ratio used for the ratio test for keypoints. Keypoints are considered a match if the
+       distance to the closest descriptor is less than ratio*2nd closest descriptor distance.
+    */
+    "ratio":0.7,
+
+    /* "ransac": float, optional, default 5.0
+       
+       Distance used to determine inliers and outliers for the RANSAC based method, see homo.
+    */
+    "ransac":5.0,
+
+    /* "hessianThreshold": int, optional, default 400
+
+       Determines the Hessian threshold used to determine SURF features.
+       Optimal number determines setting, used roughly logarithmically.
+    */
+    "hessianThreshold":1600,
+
+    /* "images": List of arrays
+
+       Comprises a large number of options, some of which are repeats of other options.
+       The source code for most should say im_args.get(blah, args.get(blah, default)).
+       These options can be image pair specific.
+
+       "p" and "q" are required values. The flow is determined from p to q.
+       The values of "p" and "q" are path names to the images.
+    */
+    "images":[
+	{
+	    "p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
+	    "q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225243_0-0-0-InLens.png",
+	    "output_name":"json_test",
+	    "hessianThreshold":1600,
+	},
+	{
+	    "p":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225210_0-0-0-InLens.png",
+	    "q":"flyem-alignment/Z1217-19m/VNC/Sec26/raw/Merlin-6049_18-07-09_225316_0-0-0-InLens.png",
+	    "output_name":"json_test2"
+	    "hessianThreshold":800,
+	    "output_type":"map"
+	}],
+
+    /* "output_type": str
+
+       Whether to produce a mapping, flow or renderer points
+    */
+    "output_type":"map"
+
+    /* "scale": float, optional, default 1.0
+
+       Scale of the images at which to look at the optical flow.
+       The optical flow reported is rescaled to account for it.
+    */
+    "scale": 0.5,
+
+    /* "output_dir": str
+       
+       Where to output images to. Should be optional but don't think it actually is.
+    */
+    "output_dir": "flyem-alignment/"
+}  
     
