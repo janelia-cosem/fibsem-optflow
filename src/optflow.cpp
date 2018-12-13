@@ -475,7 +475,7 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
       inv_mask0.download(cpu_mask0);
       inv_mask1.download(cpu_mask1);
-      cv::multiply(cpu_mask0,cpu_mask1,cpu_mask);
+      cv::bitwise_or(cpu_mask0,cpu_mask1,cpu_mask);
       random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features);
     }
 }
