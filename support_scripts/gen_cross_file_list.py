@@ -52,11 +52,11 @@ def gen_file_list(cross, stack, base_path, n, match, ppf, logdir, render_connect
             im_data["pGroupId"] = pair["p"]["groupId"]
             im_data["qGroupId"] = pair["q"]["groupId"]
             im_data["output_name"] = pair["p"]["id"] + "_" + pair["q"]["id"]
-            col_p = int(imageurls[pair["p"]["id"]].split("-")[-2])
-            col_q = int(imageurls[pair["p"]["id"]].split("-")[-2])
             if logdir is not None:
+                col_p = int(imageurls[pair["p"]["id"]].split("-")[-2])
+                col_q = int(imageurls[pair["p"]["id"]].split("-")[-2])
                 if "pGroupId" != "1.0" and "qGroupId" != "1.0":
-                    if (N_dict[imageurls[pair["p"]["id"]]] - col_p == 1) or (N_dict[imageurls[pair["q"]["id"]]] - col_q == 1):
+                    if (N_dict[imageurls[pair["p"]["id"]]] - col_p < 30) or (N_dict[imageurls[pair["q"]["id"]]] - col_q < 30):
                         im_data["features"] = kwargs.get("features", 2)
             optflow["images"].append(im_data)
 
@@ -76,7 +76,7 @@ def defaults(n, **kwargs):
     d = {}
     d["style"] = kwargs.get("style", 1)
     d["debug"] = kwargs.get("debug", False)
-    if "features" in kwargs:
+    if "features" in kwargs and kwargs.get("features", None) is not None:
         d["features"] = kwargs.get("features", 2)
     d["homo"] = kwargs.get("homo", 4)
     d["ratio"] = kwargs.get("ratio", 0.7)
@@ -85,12 +85,12 @@ def defaults(n, **kwargs):
     d["scale"] = kwargs.get("scale", 0.5)
     d["output_dir"] = kwargs.get("output_dir", ".")
     if "top" in kwargs:
-        if "rois" not in d:
+        if "rois" not in d and kwargs["top"]:
             d["rois"] = {}
         if kwargs["top"]:
             d["rois"]["top"] = kwargs["top"]
     if "bottom" in kwargs:
-        if "rois" not in d:
+        if "rois" not in d and kwargs["bottom"]:
             d["rois"] = {}
         if kwargs["bottom"]:
             d["rois"]["bottom"] = kwargs["bottom"]
@@ -125,6 +125,7 @@ if __name__ == "__main__":
     parser.add_argument("--memGB", default=os.environ.get("RENDER_CLIENT_HEAP"),
                         type=str)
     parser.add_argument("--logdir", type=str)
+    parser.add_argument("--features", default=None, type=int)
 
     args = parser.parse_args()
 
@@ -138,4 +139,4 @@ if __name__ == "__main__":
     }
 
     gen_file_list(args.cross, args.stack, args.base_path,
-                  args.n, args.match, args.ppf, args.logdir, render_connect_params, top=args.top, bottom=args.bottom)
+                  args.n, args.match, args.ppf, args.logdir, render_connect_params, top=args.top, bottom=args.bottom, features=args.features)
