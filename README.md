@@ -5,7 +5,9 @@ Repository related to optical flow calculations for fibsem images
 ## Requirements
 
 opencv
-opencv - non-free
+
+opencv - non-free (Could use orb features for free)
+
 cuda
 
 ## Basic build
