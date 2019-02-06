@@ -104,6 +104,12 @@ int from_file(Json::Value& args)
       if ( (frame0_name != old_frame0) || (scale != old_scale) ) //If it is equal it's already assigned
 	{
 	  frame0 = cv::imread(frame0_name, cv::IMREAD_GRAYSCALE);
+	  
+	  if ( (frame0.rows == 0) || (frame0.cols == 0))
+	    {
+	      std::cout << "Error: " << frame0_name << " \n";
+	      continue;
+	    }
 	  if (scale != 1) cv::resize(frame0, frame0, cv::Size(), scale, scale);
 	}
       if ( (frame1_name != old_frame1) || (scale != old_scale) )
@@ -111,7 +117,16 @@ int from_file(Json::Value& args)
 	  if ((frame1_name != old_frame0) || (scale != old_scale) )
 	    {
 	      frame1 = cv::imread(frame1_name, cv::IMREAD_GRAYSCALE);
+	      if ( (frame1.rows == 0 ) || (frame1.cols == 0) )
+		{
+		  std::cout << "Error: " << frame0_name << " \n";
+		  continue;
+		}
 	      if (scale != 1) cv::resize(frame1, frame1, cv::Size(), scale, scale);
+	    }
+	  else
+	    {
+	      frame1 =old_frame0;
 	    }
 	}
       old_scale = scale;
