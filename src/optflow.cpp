@@ -317,6 +317,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   cv::cuda::GpuMat flow_GPU;
   cv::cuda::GpuMat old_frame0 = frame0_GPU;
   cv::Mat affine(cv::Size(3,2), CV_32FC1);
+  bool affine_found = false;
   double offset_x, offset_y;
   bool features;
 
@@ -339,7 +340,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
   for (auto const& roi_key: rois.getMemberNames())
     {
       std::vector < cv::Rect > roi_vec;
-
+      affine_found = false; //Default setting, it's changed when found
       if ( (roi_key == "top") || (roi_key == "bottom") )
 	{
 	  im_args["output_suffix"] = "_"+roi_key;
@@ -359,7 +360,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	  roi_1 = roi_from_array(rois["custom_diff"]["1"]);
 	  roi_vec.push_back(roi_0);
 	  roi_vec.push_back(roi_1);
-	  solve_wrapper(frame0_GPU(roi_0), frame1_GPU(roi_1), affine, im_args, args, features, roi_vec);
+	  solve_wrapper(frame0_GPU(roi_0), frame1_GPU(roi_1), affine, affine_found, im_args, args, features, roi_vec);
 	}
       else
 	{
@@ -370,7 +371,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 		  std::cerr << "Rows or columns differ between frames no ROI selected, reverting to features even though it wasn't selected.\n";
 		}
 	      cv::cuda::GpuMat new_frame1;
-	      find_alignment(frame1_GPU, frame0_GPU, affine, im_args, args);
+	      find_alignment(frame1_GPU, frame0_GPU, affine, affine_found, im_args, args);
 	      cv::cuda::warpAffine(frame1_GPU, new_frame1, affine, frame0_GPU.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
 	      frame1_GPU = new_frame1;
 	      features = true;
@@ -379,7 +380,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	  roi = roi_from_array(rois[roi_key]);
 	  roi_vec.push_back(roi);
 	  roi_vec.push_back(roi);
-	  solve_wrapper(frame0_GPU(roi), frame1_GPU(roi), affine, im_args, args, features, roi_vec);
+	  solve_wrapper(frame0_GPU(roi), frame1_GPU(roi), affine, affine_found, im_args, args, features, roi_vec);
 	}
 
     }
@@ -392,7 +393,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 }
 
 /*GpuMats are ROI subsets so can't be constant*/
-void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, Json::Value& im_args, Json::Value& args, bool features, std::vector < cv::Rect > roi_vec)
+void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat affine, bool affine_found, Json::Value& im_args, Json::Value& args, bool features, std::vector < cv::Rect > roi_vec)
 {
   cv::cuda::GpuMat flow_GPU;
   Json::Value TV_args;
@@ -485,13 +486,14 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
 
   if ( (output_type == "random_points" ))
     {
+      //This *should* threshold baesd on points which are zero, use 1.0 to account for affine blurring points
       cv::cuda::threshold(frame1, inv_mask1, 1.0, 1.0, cv::THRESH_BINARY);
       cv::cuda::threshold(frame0, inv_mask0, 1.0, 1.0, cv::THRESH_BINARY);
 
       inv_mask0.download(cpu_mask0);
       inv_mask1.download(cpu_mask1);
       cv::bitwise_or(cpu_mask0,cpu_mask1,cpu_mask);
-      random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features);
+      random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features, affine_found);
     }
 }
   
@@ -519,14 +521,14 @@ void TVL1_solve(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::cuda::Gp
   solver -> calc(frame0, frame1, output);
 }
 
-void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features)
+void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const Json::Value& args, std::vector < cv::Rect > roi_vec, cv::Mat mask, bool features, bool affine_found)
 {
   Json::Value pm;
   
   bool debug=args.get("debug",false).asBool();
   float scale = im_args.get("scale", args.get("scale", 0.5).asFloat()).asFloat();
   float inv_scale = 1./scale;
-
+  double p_x, p_y, q_x, q_y;
   std::vector<cv::Point> locations;
   cv::findNonZero(mask,locations);
   if (!debug)
@@ -538,22 +540,57 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
     {
       cv::Point pos;
       pos = locations[i];
-      im_args["point_matches"]["w"].append(1); //Because of course
+
       if (features)
 	{
-	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  //Create temporary values to double check 0ness since it sometimes fails.
+	  p_x = (pos.x + roi_vec.at(0).x) * inv_scale;
+	  p_y = (pos.y + roi_vec.at(0).y) * inv_scale;
 	  
-	  im_args["point_matches"]["q"][0].append((flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale);
-	  im_args["point_matches"]["q"][1].append((flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale);
+	  q_x = (flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale;
+	  q_y = (flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale;
+
+	  if ( (int(p_x) == 0) || (int(p_y) == 0) || (int(q_x) == 0) || (int(q_y) == 0))
+	    {
+	      //Shouldn't have failed but cast to int to check.
+	      continue;
+	    }
+
+	  if (affine_found)
+	    {
+	      im_args["point_matches"]["w"].append(1.); 
+	    }
+	  else
+	    {
+	      im_args["point_matches"]["w"].append(1e-5); //Very weak match since could easily be wrong
+	    }
+	  im_args["point_matches"]["p"][0].append(p_x);
+	  im_args["point_matches"]["p"][1].append(p_y);
+	  
+	  im_args["point_matches"]["q"][0].append(q_x);
+	  im_args["point_matches"]["q"][1].append(q_y);
 	}
       else
 	{
-	  im_args["point_matches"]["p"][0].append((pos.x + roi_vec.at(0).x) * inv_scale);
-	  im_args["point_matches"]["p"][1].append((pos.y + roi_vec.at(0).y) * inv_scale);
+	  p_x = (pos.x + roi_vec.at(0).x) * inv_scale;
+	  p_y = (pos.y + roi_vec.at(0).y) * inv_scale;
+
+	  q_x = (pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale;
+	  q_y = (pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale;
+
+	  if ( (int(p_x) == 0) || (int(p_y) == 0) || (int(q_x) == 0) || (int(q_y) == 0))
+	    {
+	      //Shouldn't have failed but cast to int to check.
+	      continue;
+	    }
+
+	  im_args["point_matches"]["w"].append(1); //Should change to be low when failed affine
+
+	  im_args["point_matches"]["p"][0].append(p_x);
+	  im_args["point_matches"]["p"][1].append(p_y);
 	  
-	  im_args["point_matches"]["q"][0].append((pos.x + roi_vec.at(1).x + flow_x.at<float>(pos.y,pos.x)) * inv_scale);
-	  im_args["point_matches"]["q"][1].append((pos.y + roi_vec.at(1).y + flow_y.at<float>(pos.y,pos.x)) * inv_scale);
+	  im_args["point_matches"]["q"][0].append(q_x);
+	  im_args["point_matches"]["q"][1].append(q_y);
 	  
 	}
     }
@@ -566,9 +603,7 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
       im_args["point_matches"]["q"][1].append(-1);
       im_args["point_matches"]["w"].append(0);
 
-    }
-  
-	  
+    }  
 }
 
 void move_pm(Json::Value& im_args, Json::Value& args)

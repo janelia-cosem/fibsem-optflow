@@ -15,6 +15,6 @@ Json::Value orb_defaults(const Json::Value& im_args, const Json::Value& args);
 
 Json::Value surf_defaults(const Json::Value& im_args, const Json::Value& args);
 
-void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat& affine, Json::Value& im_args, Json::Value& args);
+void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat& affine, bool& affine_found, Json::Value& im_args, Json::Value& args);
 
 #endif

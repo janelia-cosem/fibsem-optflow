@@ -43,7 +43,7 @@ Json::Value surf_defaults(const Json::Value& im_args, const Json::Value& args)
   return surf_args;
 }
 
-void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat& affine, Json::Value& im_args, Json::Value& args)
+void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat& affine, bool& affine_found, Json::Value& im_args, Json::Value& args)
 {
 
   bool debug=args.get("debug",false).asBool();
@@ -152,6 +152,7 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
 	      std::cout << homo.at<double>(0,0) << ' ' << homo.at<double>(0,1) << ' ' << homo.at<double>(0,2) << "\n" << homo.at<double>(1,0) << ' ' << homo.at<double>(1,1) << ' ' << homo.at<double>(1,2) << "\n" << homo.at<double>(2,0) << ' ' << homo.at<double>(2,1) << ' ' << homo.at<double>(2,2) << "\n";
 	    }
 	  homo(cv::Range(0,2),cv::Range(0,3)).copyTo(affine);
+	  affine_found = true;
 	}
     }
   else
