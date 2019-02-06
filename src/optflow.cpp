@@ -124,10 +124,6 @@ int from_file(Json::Value& args)
 		}
 	      if (scale != 1) cv::resize(frame1, frame1, cv::Size(), scale, scale);
 	    }
-	  else
-	    {
-	      frame1 =old_frame0;
-	    }
 	}
       old_scale = scale;
       old_frame0 = frame0_name;
