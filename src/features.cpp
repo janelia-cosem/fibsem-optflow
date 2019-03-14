@@ -13,7 +13,7 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/xfeatures2d/cuda.hpp>
-#include <opencv2/imgproc.hpp>
+#include <opencv2/video.hpp>
 
 #include "features.h"
 
