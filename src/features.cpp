@@ -132,11 +132,11 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
 
       if (im_args.get("transform", args.get("transform", "rigid").asString()).asString() == "affine")
 	{
-	  transform = cv::findTransformgraphy( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
+	  transform = cv::findHomography( points_0, points_1, im_args.get("homo",args.get("homo",cv::RANSAC).asInt()).asInt() , im_args.get("ransac",args.get("ransac",5).asDouble()).asDouble());
 	}
       else
 	{
-	  transform = cv::estimateRigidTransform( points_0, points_1, false);
+	  transform = cv::findRigidTransform( points_0, points_1, false);
 	}
       //if (false)
       if ( (transform.rows == 0) || (std::abs(1-transform.at<double>(0,0)) > 0.20) || (std::abs(1-transform.at<double>(1,1)) > 0.20))
