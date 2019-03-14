@@ -13,6 +13,7 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/xfeatures2d/cuda.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "features.h"
 
@@ -136,7 +137,7 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
 	}
       else
 	{
-	  transform = cv::findRigidTransform( points_0, points_1, false);
+	  transform = cv::estimateRigidTransform( points_0, points_1, false);
 	}
       //if (false)
       if ( (transform.rows == 0) || (std::abs(1-transform.at<double>(0,0)) > 0.20) || (std::abs(1-transform.at<double>(1,1)) > 0.20))
