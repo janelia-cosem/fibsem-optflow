@@ -254,6 +254,7 @@ void get_rois(Json::Value& rois, Json::Value& args, int rows, int cols)
 	  rois["custom"] = args["custom"];
 	}
     }
+
 }
 
 /*To implement again in future, but not immediately needed for JSON.*/
@@ -351,6 +352,7 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	    {
 	      std::cerr << "Features isn't compatible with different ROIs for each image.\n Ignoring features.\n";
 	    }
+	  features = false;
 	  cv::Rect roi_0, roi_1;
 	  roi_0 = roi_from_array(rois["custom_diff"]["0"]);
 	  roi_1 = roi_from_array(rois["custom_diff"]["1"]);
@@ -360,9 +362,9 @@ void solve_rois(cv::Mat& frame0, cv::Mat& frame1, Json::Value& rois, Json::Value
 	}
       else
 	{
-	  if (features || (frame0.rows != frame1.rows) || (frame0.cols != frame1.cols) || roi_key=="default")
+	  if (features || (frame0.rows != frame1.rows) || (frame0.cols != frame1.cols) )
 	    {
-	      if ( ((frame0.rows != frame1.rows) || (frame0.cols != frame1.cols)) || roi_key=="default" && roi_key != "custom" && features == false)
+	      if ( ((frame0.rows != frame1.rows) || (frame0.cols != frame1.cols)) && roi_key != "custom" && features == false)
 		{
 		  std::cerr << "Rows or columns differ between frames no ROI selected, reverting to features even though it wasn't selected.\n";
 		}
@@ -558,7 +560,7 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
 	    }
 	  else
 	    {
-	      im_args["point_matches"]["w"].append(1e-5); //Very weak match since could easily be wrong
+	      im_args["point_matches"]["w"].append(1.); //Very weak match since could easily be wrong
 	    }
 	  im_args["point_matches"]["p"][0].append(p_x);
 	  im_args["point_matches"]["p"][1].append(p_y);
