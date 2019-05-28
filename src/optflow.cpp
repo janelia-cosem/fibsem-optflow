@@ -108,6 +108,7 @@ int from_file(Json::Value& args)
 	  if ( (frame0.rows == 0) || (frame0.cols == 0))
 	    {
 	      std::cout << "Error: " << frame0_name << " \n";
+	      std::cout << "Rows: " << frame0.rows <<"\n" << "Cols: " << frame0.cols <<"\n";
 	      continue;
 	    }
 	  if (scale != 1) cv::resize(frame0, frame0, cv::Size(), scale, scale);
@@ -119,7 +120,9 @@ int from_file(Json::Value& args)
 	      frame1 = cv::imread(frame1_name, cv::IMREAD_GRAYSCALE);
 	      if ( (frame1.rows == 0 ) || (frame1.cols == 0) )
 		{
-		  std::cout << "Error: " << frame0_name << " \n";
+		  std::cout << "Error: " << frame1_name << " \n";
+		  std::cout << "Rows: " << frame1.rows <<"\n" << "Cols: " << frame1.cols <<"\n";
+
 		  continue;
 		}
 	      if (scale != 1) cv::resize(frame1, frame1, cv::Size(), scale, scale);
@@ -145,8 +148,8 @@ int from_file(Json::Value& args)
 	  //Just set to be min sizes and then features will fix it.
 	  rois["default"][0] = 0;
 	  rois["default"][1] = 0;
-	  rois["default"][2] = std::min(frame0.cols, frame1.cols);
-	  rois["default"][3] =  std::min(frame0.rows, frame1.rows);
+	  rois["default"][2] = frame0.cols;;//std::min(frame0.cols, frame1.cols);
+	  rois["default"][3] = frame0.rows;//std::min(frame0.rows, frame1.rows);
 	}
       std::sprintf(buffer, "%0.2f", scale);
       
@@ -464,33 +467,38 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       cv::cuda::add(flow_xy_GPU[1], map_y_GPU, flow_xy_GPU[1]);
     }
   //Mask out 0s in frame0, these shouldn't actually map to anything so if something has happened it's wrong
-  cv::cuda::GpuMat mask;
+  cv::cuda::GpuMat mask, inv_mask;
   cv::cuda::GpuMat inv_mask0, inv_mask1;
   cv::Mat cpu_mask0, cpu_mask1, cpu_mask;
-  cv::cuda::threshold(frame1, mask, 1.0, 1.0, cv::THRESH_BINARY_INV);
-  flow_xy_GPU[0].setTo(cv::Scalar::all(0), mask);
-  flow_xy_GPU[1].setTo(cv::Scalar::all(0), mask);
+  cv::cuda::threshold(frame1, inv_mask1, 1.0, 1.0, cv::THRESH_BINARY);
+  cv::cuda::threshold(frame0, inv_mask0, 1.0, 1.0, cv::THRESH_BINARY);
+  cv::cuda::bitwise_and(inv_mask0,inv_mask1,inv_mask);
+  cv::cuda::bitwise_not(inv_mask,mask);
+  cv::cuda::threshold(mask,mask,254.5,1.0,cv::THRESH_BINARY);
+  
+  flow_xy_GPU[0].setTo(cv::Scalar(0), mask);
+  flow_xy_GPU[1].setTo(cv::Scalar(0), mask);
 
   flow_xy_GPU[0].download(flow_x);
   flow_xy_GPU[1].download(flow_y);
-
+  mask.download(cpu_mask);
   if ( (output_type == "map") || (output_type == "flow") )
     {
       std::string file_x = im_args["output"].asString()+im_args["output_suffix"].asString()+"_x.tiff";
       std::string file_y = im_args["output"].asString()+im_args["output_suffix"].asString()+"_y.tiff";
       cv::imwrite(file_x, flow_x);
       cv::imwrite(file_y, flow_y);
+      std::string file_mask = im_args["output"].asString()+im_args["output_suffix"].asString()+"_mask.tiff";
+      cv::imwrite(file_mask, cpu_mask);
+
     }
 
   if ( (output_type == "random_points" ))
     {
       //This *should* threshold baesd on points which are zero, use 1.0 to account for affine blurring points
-      cv::cuda::threshold(frame1, inv_mask1, 1.0, 1.0, cv::THRESH_BINARY);
-      cv::cuda::threshold(frame0, inv_mask0, 1.0, 1.0, cv::THRESH_BINARY);
-
       inv_mask0.download(cpu_mask0);
       inv_mask1.download(cpu_mask1);
-      cv::bitwise_or(cpu_mask0,cpu_mask1,cpu_mask);
+      cv::bitwise_and(cpu_mask0,cpu_mask1,cpu_mask);
       random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features, affine_found);
     }
 }

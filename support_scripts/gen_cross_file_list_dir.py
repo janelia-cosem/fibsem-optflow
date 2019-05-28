@@ -9,7 +9,6 @@ from glob import glob
 
 
 def gen_file_list(cross_dir, stack, n, match, ppf, logdir, render_connect_params, **kwargs):
-
     optflow = defaults(n, **kwargs)
 
     optflow["host"] = render_connect_params["host"]
@@ -45,7 +44,8 @@ def gen_file_list(cross_dir, stack, n, match, ppf, logdir, render_connect_params
                     if (int(float(pair["p"]["groupId"])) not in kwargs["sub_list"]) and (int(float(pair["q"]["groupId"])) not in kwargs["sub_list"]):
                         continue
                     print(pair["p"])
-
+                # if abs(float(pair["p"]["groupId"]) - float(pair["q"]["groupId"])) <= 9:
+                #    continue
                 im_data = {}
                 im_data["p"] = imageurls[pair["p"]["id"]]
                 im_data["q"] = imageurls[pair["q"]["id"]]
