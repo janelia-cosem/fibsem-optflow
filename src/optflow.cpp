@@ -76,7 +76,7 @@ int from_file(Json::Value& args)
 {
   
   std::string frame0_name, frame1_name, out_name, old_frame0="", old_frame1="";
-  cv::Mat frame0, frame1, temp_frame;
+  cv::Mat frame0, frame1, frame0_mask, frame1_mask, temp_frame;
   float scale, old_scale;
   char buffer[10]; //Even 10 is overkill
   Json::Value images=args["images"];
@@ -104,7 +104,11 @@ int from_file(Json::Value& args)
       if ( (frame0_name != old_frame0) || (scale != old_scale) ) //If it is equal it's already assigned
 	{
 	  frame0 = cv::imread(frame0_name, cv::IMREAD_GRAYSCALE);
-	  
+	  if (im_data.isMember("p_mask"))
+	    {
+	      frame0_mask = cv::imread(im_data["p_mask"].asString(), cv::IMREAD_GRAYSCALE);
+	      cv::bitwise_and(frame0, frame0_mask, frame0);
+	    }
 	  if ( (frame0.rows == 0) || (frame0.cols == 0))
 	    {
 	      std::cout << "Error: " << frame0_name << " \n";
@@ -118,6 +122,12 @@ int from_file(Json::Value& args)
 	  if ((frame1_name != old_frame0) || (scale != old_scale) )
 	    {
 	      frame1 = cv::imread(frame1_name, cv::IMREAD_GRAYSCALE);
+	      if (im_data.isMember("q_mask"))
+		{
+		  frame1_mask = cv::imread(im_data["q_mask"].asString(), cv::IMREAD_GRAYSCALE);
+		  cv::bitwise_and(frame1, frame1_mask, frame1);
+
+		}
 	      if ( (frame1.rows == 0 ) || (frame1.cols == 0) )
 		{
 		  std::cout << "Error: " << frame1_name << " \n";
@@ -148,7 +158,7 @@ int from_file(Json::Value& args)
 	  //Just set to be min sizes and then features will fix it.
 	  rois["default"][0] = 0;
 	  rois["default"][1] = 0;
-	  rois["default"][2] = frame0.cols;;//std::min(frame0.cols, frame1.cols);
+	  rois["default"][2] = frame0.cols;//std::min(frame0.cols, frame1.cols);
 	  rois["default"][3] = frame0.rows;//std::min(frame0.rows, frame1.rows);
 	}
       std::sprintf(buffer, "%0.2f", scale);
@@ -499,7 +509,10 @@ void solve_wrapper(cv::cuda::GpuMat frame0, cv::cuda::GpuMat frame1, cv::Mat aff
       inv_mask0.download(cpu_mask0);
       inv_mask1.download(cpu_mask1);
       cv::bitwise_and(cpu_mask0,cpu_mask1,cpu_mask);
-      random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features, affine_found);
+      //if ( (features && affine_found) || (!features)) //Check for Eric
+	  //{
+	  random_points(flow_x, flow_y, im_args, args, roi_vec, cpu_mask, features, affine_found);
+	  //}
     }
 }
   
@@ -555,7 +568,10 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
 	  
 	  q_x = (flow_x.at<float>(pos.y, pos.x)+ roi_vec.at(1).x)  * inv_scale;
 	  q_y = (flow_y.at<float>(pos.y, pos.x)+ roi_vec.at(1).y)  * inv_scale;
-
+	  p_x += im_args.get("pMatchDeltaX", 0).asFloat();
+	  p_y += im_args.get("pMatchDeltaY", 0).asFloat();
+	  q_x += im_args.get("qMatchDeltaX", 0).asFloat();
+	  q_y += im_args.get("qMatchDeltaY", 0).asFloat();
 	  if ( (int(p_x) == 0) || (int(p_y) == 0) || (int(q_x) == 0) || (int(q_y) == 0))
 	    {
 	      //Shouldn't have failed but cast to int to check.
@@ -589,6 +605,11 @@ void random_points(cv::Mat& flow_x, cv::Mat& flow_y, Json::Value& im_args, const
 	      //Shouldn't have failed but cast to int to check.
 	      continue;
 	    }
+
+	  p_x += im_args.get("pMatchDeltaX", 0).asFloat();
+	  p_y += im_args.get("pMatchDeltaY", 0).asFloat();
+	  q_x += im_args.get("qMatchDeltaX", 0).asFloat();
+	  q_y += im_args.get("qMatchDeltaY", 0).asFloat();
 
 	  im_args["point_matches"]["w"].append(1); //Should change to be low when failed affine
 

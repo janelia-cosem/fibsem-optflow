@@ -125,6 +125,7 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
     {
       points_0.push_back( keypoints_0[ good[i].queryIdx ].pt );
       points_1.push_back( keypoints_1[ good[i].trainIdx ].pt );
+      std::cout << keypoints_0[ good[i].queryIdx ].pt << " " << keypoints_1[ good[i].trainIdx ].pt << "\n";
     }
 
   cv::Mat transform;
@@ -142,6 +143,7 @@ void find_alignment(cv::cuda::GpuMat& frame0, cv::cuda::GpuMat& frame1, cv::Mat&
       //if (false)
       if ( (transform.rows == 0) || (std::abs(1-transform.at<double>(0,0)) > 0.20) || (std::abs(1-transform.at<double>(1,1)) > 0.20))
 	{
+	  std::cout << transform << std::endl;
 	  std::cout << "More than twenty percent variance in zoom or no transformgraphy found, this is probably an error, ignoring the transformation.\n";
 	  if (debug)
 	    {
