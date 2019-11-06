@@ -1,5 +1,5 @@
-BootStrap: docker
-From: nvidia/cuda:9.2-devel-ubuntu16.04
+Bootstrap: localimage
+From: opencv.img
 
 %files
     ../src fibsem-optflow
@@ -9,41 +9,11 @@ From: nvidia/cuda:9.2-devel-ubuntu16.04
     Version v0.2.0
     
 %post
-    apt-get -y update
-    apt-cache search libcurl
-    apt-get -y install build-essential
-    apt-get install -y cmake pkg-config \
-     zlib1g-dev ffmpeg libwebp-dev \
-     libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libjasper-dev \
-     libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev\
-     libgsl-dev libclblas-dev libjsoncpp-dev libboost-iostreams-dev\
-     libcurl4-openssl-dev libblas-dev g++-5 wget unzip
-    mkdir opencv
-    wget -O opencv.zip https://github.com/opencv/opencv/archive/3.4.1.zip 
-    wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/3.4.1.zip
-    unzip opencv.zip -d opencv
-    unzip opencv_contrib.zip -d opencv
-    cd opencv/opencv-3.4.1
-    mkdir build
-    cd build
-    cmake -D CMAKE_BUILD_TYPE=RELEASE \
-	-D CMAKE_INSTALL_PREFIX=/usr/local \
-	-D INSTALL_C_EXAMPLES=OFF \
-	-D WITH_CUDA=ON \
-    	-D ENABLE_FAST_MATH=1 \
-    	-D CUDA_FAST_MATH=1 \
-    	-D WITH_CUBLAS=1 \
-	-D INSTALL_PYTHON_EXAMPLES=OFF \
-	-D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.1/modules \
-	-D BUILD_EXAMPLES=OFF ..
-     make -j16
-     make install
      ldconfig
      cd /fibsem-optflow
      g++ -ggdb *.cpp -o optflow \
       `pkg-config --cflags --libs opencv` -lgsl -lblas -lpng \
       -ljsoncpp -lboost_iostreams -lcurl -std=c++11
-     rm -r /opencv
 
 %runscript
      exec /fibsem-optflow/optflow "$@"
